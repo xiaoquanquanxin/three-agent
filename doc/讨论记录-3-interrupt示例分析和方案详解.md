@@ -476,3 +476,55 @@ const getNearbyObjects = (x: number, y: number, z: number, radius: number = 5) =
   return results.sort((a, b) => a.distance - b.distance);
 };
 ```
+
+#### 3. 处理 interrupt 并恢复执行
+```typescript
+const handleInterrupt = async () => {
+  if (!interrupt) return;
+
+  if (interrupt.action === "getNearbyObjects") {
+    // 执行前端工具
+    const result = getNearbyObjects(
+      interrupt.params.x,
+      interrupt.params.y,
+      interrupt.params.z,
+      interrupt.params.radius
+    );
+
+    // 恢复后端执行
+    await client.runs.wait(threadId, "three-agent", {
+      command: {
+        resume: {
+          nearbyObjects: result
+        }
+      }
+    });
+
+    setInterrupt(null);
+  }
+};
+```
+
+---
+
+## 五、关键要点总结
+
+### 1. interrupt 的核心机制
+- **触发**：在 Agent 节点中调用 `interrupt({...})`
+- **暂停**：LangGraph 自动保存 checkpoint 并暂停执行
+- **传递**：interrupt 数据通过 `chunk.__interrupt__[0].value` 传递给前端
+- **恢复**：前端调用 `client.runs.wait(threadId, agent, {command: {resume: {...}}})`
+- **合并**：resume 中的数据会合并到 State 中
+
+### 2. 与我们之前设计的对比
+
+#### 之前的理解（部分错误）：
+- 以为需要设计复杂的 RPC 协议
+- 以为需要单独的 `/api/chat/continue` 接口
+- 不确定如何传递前端工具的结果
+
+#### 现在的理解（基于官方示例）：
+- **不需要单独的 continue 接口**：使用 LangGraph SDK 的 `client.runs.wait()` 即可
+- **不需要复杂的协议**：interrupt 和 resume 机制已经内置
+- **数据传递很简单**：resume 的数据直接合并到 State
+
