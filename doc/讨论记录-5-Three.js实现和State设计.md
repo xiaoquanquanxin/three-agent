@@ -224,3 +224,8 @@ interface AgentState {
 - 记录当前正在处理的意图
 - 记录当前正在执行的 Agent
 - 用于调试和日志
+
+**3. tempData（临时数据）**
+- 存储感知阶段的结果（如 nearbyObjects）
+- 存储当前操作的目标对象 ID
+- 在操作完成后可以清空
