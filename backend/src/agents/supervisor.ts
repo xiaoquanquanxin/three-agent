@@ -21,26 +21,26 @@ export function createSupervisorAgent() {
   });
 
   const systemPrompt = `你是一个协调 Three.js 场景编辑任务的监督者智能体。
-根据用户的请求和当前状态，确定下一个应该执行的任务。
+根据用户的请求，确定下一个应该执行的任务。
+
+重要：你必须只返回任务名称，不要有任何其他文字！
 
 可用任务：
-1. create_agent - 当用户需要创建新对象时（正方形、圆形、三角形）
-2. delete_agent - 当用户需要删除对象时
-3. modify_agent - 当用户需要修改对象时
-4. query_agent - 当用户需要查询对象信息时
-
-规则：
-- 分析用户输入，识别其意图（创建、删除、修改、查询）
-- 只在确定用户想要执行某个操作时，才路由到对应的 Agent
-- 如果用户的请求不明确，回复 '__end__' 并在 messages 中添加澄清信息
-- 只有在任务完成或无法继续时，才回复 '__end__'
+1. create_agent - 创建新对象（正方形、圆形、三角形）
+2. delete_agent - 删除对象
+3. modify_agent - 修改对象
+4. query_agent - 查询对象信息
+5. __end__ - 非编辑任务或任务完成
 
 示例：
-- "画一个正方形" → create_agent
-- "删除附近的圆形" → delete_agent
-- "修改上一个正方形的边长" → modify_agent
-- "场景中有几个对象？" → query_agent
-- "你好" → __end__ (不是编辑任务)`;
+用户："画一个正方形" → 回复：create_agent
+用户："创建一个圆形，半径10" → 回复：create_agent
+用户："删除附近的圆形" → 回复：delete_agent
+用户："修改上一个正方形的边长" → 回复：modify_agent
+用户："场景中有几个对象？" → 回复：query_agent
+用户："你好" → 回复：__end__
+
+记住：只返回任务名称，不要有任何解释！`;
 
   return async function supervisorAgent(
     state: AgentState
@@ -53,18 +53,17 @@ export function createSupervisorAgent() {
     // 构建 LLM 输入
     const llmMessages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(`
-用户请求：${userRequest}
-当前任务：${state.current_task || '无'}
+      new HumanMessage(`用户请求：${userRequest}
 
-请分析用户意图，确定下一个应该执行的 Agent。
-回复格式：只需要回复 Agent 名称，如 "create_agent" 或 "delete_agent" 或 "__end__"
-`),
+请只回复任务名称（create_agent、delete_agent、modify_agent、query_agent 或 __end__）`),
     ];
 
     // 调用 LLM
     const response = await llm.invoke(llmMessages);
     const responseContent = response.content as string;
+
+    // 调试日志：输出 LLM 原始回复
+    console.log(`📝 LLM 原始回复: "${responseContent}"`);
 
     // 解析 LLM 回复，确定下一个 Agent
     let nextAgent: NextAgent;
@@ -96,9 +95,12 @@ export function createSupervisorAgent() {
     return new Command({
       goto: nextAgent,
       update: {
-        intent,
+        // 如果是 __end__ 且已有 intent，保留原 intent；否则使用新解析的 intent
+        intent: nextAgent === '__end__' && state.intent ? state.intent : intent,
         next_agent: nextAgent,
         current_task: nextAgent === '__end__' ? undefined : nextAgent,
+        // 保留 tempData（包含 createdObject 等数据）
+        tempData: state.tempData,
         messages: [
           ...state.messages,
           {

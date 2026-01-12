@@ -97,6 +97,8 @@ function ThreeScene({ shapes }: ThreeSceneProps) {
   useEffect(() => {
     if (!sceneRef.current) return
 
+    console.log('🎨 ThreeScene: 更新场景，shapes:', shapes)
+
     const scene = sceneRef.current
     const shapesMap = shapesMapRef.current
 
@@ -118,10 +120,14 @@ function ThreeScene({ shapes }: ThreeSceneProps) {
     // 添加或更新形状
     shapes.forEach((shape) => {
       if (!shapesMap.has(shape.id)) {
+        console.log('➕ 创建新形状:', shape.type, shape.id)
         const mesh = createShapeMesh(shape)
         if (mesh) {
+          console.log('✅ Mesh 创建成功，添加到场景')
           scene.add(mesh)
           shapesMap.set(shape.id, mesh)
+        } else {
+          console.error('❌ Mesh 创建失败')
         }
       }
     })
@@ -134,6 +140,13 @@ function ThreeScene({ shapes }: ThreeSceneProps) {
  * 根据形状数据创建 Three.js Mesh
  */
 function createShapeMesh(shape: any): THREE.Mesh | null {
+  console.log('🔨 createShapeMesh:', {
+    type: shape.type,
+    hasVertexList: !!shape.vertexList,
+    position_x: shape.position_x,
+    position_z: shape.position_z,
+  })
+
   const { type, vertexList, position_x, position_z } = shape
 
   let geometry: THREE.BufferGeometry | null = null

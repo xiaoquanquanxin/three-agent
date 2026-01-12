@@ -8,7 +8,7 @@ interface Message {
 }
 
 interface ChatPanelProps {
-  onShapeUpdate: (shapes: any[]) => void
+  onShapeUpdate: React.Dispatch<React.SetStateAction<any[]>>
 }
 
 function ChatPanel({ onShapeUpdate }: ChatPanelProps) {
@@ -73,8 +73,25 @@ function ChatPanel({ onShapeUpdate }: ChatPanelProps) {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      // 更新场景
-      await fetchShapes()
+      // 根据 action 更新场景
+      if (data.action === 'create' && data.data) {
+        // 创建对象：直接添加到场景
+        console.log('✅ 收到创建响应，添加对象:', data.data)
+        onShapeUpdate((prevShapes) => [...prevShapes, data.data])
+      } else if (data.action === 'delete' && data.targetId) {
+        // 删除对象：从场景移除
+        console.log('✅ 收到删除响应，移除对象:', data.targetId)
+        onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
+      } else if (data.action === 'modify' && data.data) {
+        // 修改对象：更新场景中的对象
+        console.log('✅ 收到修改响应，更新对象:', data.data)
+        onShapeUpdate((prevShapes) =>
+          prevShapes.map(s => s.id === data.data.id ? data.data : s)
+        )
+      } else {
+        // 其他情况：重新获取所有形状（兜底）
+        await fetchShapes()
+      }
     } catch (error) {
       console.error('发送消息失败:', error)
       const errorMessage: Message = {

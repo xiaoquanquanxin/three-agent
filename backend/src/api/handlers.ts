@@ -41,18 +41,48 @@ export async function handleChat(req: Request, res: Response) {
 
     console.log('✅ Workflow 执行完成');
 
-    // 获取最后一条 assistant 消息
-    const lastMessage = result.messages[result.messages.length - 1];
-    const responseMessage = lastMessage?.content || '执行完成';
+    // 获取最后一条 assistant 消息（跳过系统消息）
+    let responseMessage = '执行完成';
+    for (let i = result.messages.length - 1; i >= 0; i--) {
+      const msg = result.messages[i];
+      const role = (msg as any).role || (msg as any)._getType?.();
+      if (role === 'assistant') {
+        responseMessage = String(msg.content);
+        break;
+      }
+    }
 
-    // 返回响应
-    res.json({
+    // 构造响应（按照接口协议）
+    const response: any = {
       status: 'completed',
       message: responseMessage,
       sessionId: actualSessionId,
       threadId: actualThreadId,
-      intent: result.intent,
-    });
+    };
+
+    // 根据意图添加 action 和数据
+    if (result.intent === 'create' && result.tempData?.createdObject) {
+      response.action = 'create';
+      response.data = result.tempData.createdObject;
+    } else if (result.intent === 'delete' && result.tempData?.targetObjectId) {
+      response.action = 'delete';
+      response.targetId = result.tempData.targetObjectId;
+    } else if (result.intent === 'modify' && result.tempData?.modifiedObject) {
+      response.action = 'modify';
+      response.data = result.tempData.modifiedObject;
+    } else {
+      response.action = 'none';
+    }
+
+    console.log('📤 返回响应:', JSON.stringify({
+      status: response.status,
+      action: response.action,
+      hasData: !!response.data,
+      message: response.message.substring(0, 50),
+    }));
+
+    // 返回响应
+    res.json(response);
   } catch (error: any) {
     console.error('❌ 处理消息失败:', error);
     res.status(500).json({

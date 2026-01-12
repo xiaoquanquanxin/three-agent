@@ -14,7 +14,7 @@ import { generateId } from '../utils/uuid';
 export function createCreateAgent() {
   const llm = new ChatOpenAI({
     modelName: config.modelName,
-    temperature: 0.7,
+    temperature: 0.1, // 降低 temperature，让输出更稳定
     openAIApiKey: config.apiKey,
     configuration: {
       baseURL: config.baseURL,
@@ -22,11 +22,16 @@ export function createCreateAgent() {
   });
 
   const systemPrompt = `你是一个专门处理创建几何对象的智能体。
-你可以创建：正方形（square）、圆形（circle）、三角形（triangle）。
 
-重要：你必须只返回 JSON 格式，不要有任何其他文字！
+重要规则：
+1. 必须只返回 JSON 格式，不要有任何其他文字！
+2. type 字段必须是小写英文：square、circle 或 triangle
+3. 识别规则：
+   - 用户说"正方形"、"方形"、"四边形" → type 是 "square"
+   - 用户说"圆形"、"圆"、"圆圈" → type 是 "circle"
+   - 用户说"三角形" → type 是 "triangle"
 
-解析用户请求，返回以下 JSON 格式：
+返回 JSON 格式：
 {
   "type": "square",
   "params": {"sideLength": 5},
@@ -35,35 +40,80 @@ export function createCreateAgent() {
 }
 
 字段说明：
-- type: "square"（正方形）| "circle"（圆形）| "triangle"（三角形）
+- type: 必须是 "square" 或 "circle" 或 "triangle"（小写英文）
 - params:
-  - square: {"sideLength": 数字}
-  - circle: {"radius": 数字}
-  - triangle: {"size": 数字}
-- position: {"x": 数字, "y": 0, "z": 数字}
-  - 如果用户没有指定位置，使用 {"x": 0, "y": 0, "z": 0}
-- needsNearbyObjects:
-  - true: 用户说"附近"、"旁边"等模糊位置
-  - false: 其他情况
+  - square: {"sideLength": 边长数字}
+  - circle: {"radius": 半径数字}
+  - triangle: {"size": 大小数字}
+- position: {"x": 数字, "y": 0, "z": 数字}（默认原点）
+- needsNearbyObjects: 用户是否说"附近"、"旁边"（true/false）
 
-示例：
+示例 1 - 正方形：
 输入："画一个正方形，边长5"
 输出：{"type": "square", "params": {"sideLength": 5}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": false}
 
-输入："创建一个圆形，半径10，位置在(5,0,5)"
-输出：{"type": "circle", "params": {"radius": 10}, "position": {"x": 5, "y": 0, "z": 5}, "needsNearbyObjects": false}
+示例 2 - 圆形：
+输入："创建一个圆形，半径10"
+输出：{"type": "circle", "params": {"radius": 10}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": false}
 
+示例 3 - 圆形（另一种说法）：
+输入："画个圆，半径3"
+输出：{"type": "circle", "params": {"radius": 3}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": false}
+
+示例 4 - 三角形：
 输入："在附近画一个三角形"
 输出：{"type": "triangle", "params": {"size": 5}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": true}
 
-记住：只返回 JSON，不要有任何解释！`;
+记住：仔细识别用户说的是哪种形状！type 必须是小写英文（square/circle/triangle）！`;
 
   return async function createAgent(
     state: AgentState
   ): Promise<Command<'supervisor'>> {
     console.log('\n🎨 CreateAgent: 处理创建对象请求...');
 
-    const userRequest = state.messages[state.messages.length - 1].content;
+    // 调试：打印所有消息
+    console.log('📋 所有消息:');
+    state.messages.forEach((m: any, i: number) => {
+      console.log(`  [${i}] role: ${m.role || m._getType()}, content: "${String(m.content).substring(0, 50)}..."`);
+    });
+
+    // 找到最后一条真正的用户消息（跳过系统消息和 Supervisor 的路由消息）
+    let userRequest = '';
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      const msg = state.messages[i];
+      const role = msg.role || (msg as any)._getType?.();
+      const content = String(msg.content);
+
+      // 跳过系统消息和 Supervisor 的路由消息
+      if (role === 'system' || content.includes('Supervisor: 路由到')) {
+        continue;
+      }
+
+      // 找到用户消息
+      if (role === 'user' || role === 'human') {
+        userRequest = content;
+        break;
+      }
+    }
+
+    console.log(`👤 提取的用户请求: "${userRequest}"`);
+
+    // 如果没有找到用户请求，返回错误
+    if (!userRequest) {
+      console.error('❌ 未找到用户消息');
+      return new Command({
+        goto: 'supervisor',
+        update: {
+          messages: [
+            ...state.messages,
+            {
+              role: 'assistant',
+              content: '抱歉，我无法找到你的请求内容。',
+            } as any,
+          ],
+        },
+      });
+    }
 
     // 第一次进入：解析用户请求
     if (!state.tempData?.operationParams) {
@@ -71,11 +121,16 @@ export function createCreateAgent() {
 
       const llmMessages = [
         new SystemMessage(systemPrompt),
-        new HumanMessage(`用户请求：${userRequest}\n\n请解析并返回 JSON 格式的结果。`),
+        new HumanMessage(`用户说："${userRequest}"
+
+请解析这个请求，返回 JSON 格式的结果。记住：type 必须是 square、circle 或 triangle（小写英文）。`),
       ];
 
       const response = await llm.invoke(llmMessages);
       const responseContent = response.content as string;
+
+      // 调试日志：输出 LLM 原始回复
+      console.log(`📝 LLM 原始回复: "${responseContent}"`);
 
       // 解析 LLM 返回的 JSON
       let parsedData;
@@ -104,6 +159,39 @@ export function createCreateAgent() {
       }
 
       console.log('✅ 解析结果:', parsedData);
+      console.log('📊 解析的类型:', parsedData.type);
+
+      // 规范化类型（处理可能的中文或其他变体）
+      const typeMap: Record<string, string> = {
+        '正方形': 'square',
+        '方形': 'square',
+        'square': 'square',
+        '圆形': 'circle',
+        '圆': 'circle',
+        'circle': 'circle',
+        '三角形': 'triangle',
+        'triangle': 'triangle',
+      };
+
+      const normalizedType = typeMap[parsedData.type?.toLowerCase()] || parsedData.type;
+      if (!['square', 'circle', 'triangle'].includes(normalizedType)) {
+        console.error(`❌ 不支持的类型: ${parsedData.type}`);
+        return new Command({
+          goto: 'supervisor',
+          update: {
+            messages: [
+              ...state.messages,
+              {
+                role: 'assistant',
+                content: `不支持的形状类型: ${parsedData.type}。支持的类型：正方形、圆形、三角形。`,
+              } as any,
+            ],
+          },
+        });
+      }
+
+      parsedData.type = normalizedType;
+      console.log('✅ 规范化后的类型:', normalizedType);
 
       // 检查是否需要前端工具
       if (parsedData.needsNearbyObjects) {
@@ -217,9 +305,19 @@ async function executeCreate(
     return new Command({
       goto: 'supervisor',
       update: {
+        intent: 'create', // 保留 intent
         tempData: {
           ...state.tempData,
           targetObjectId: id,
+          createdObject: {
+            id,
+            type,
+            vertexList,
+            position: [position.x, position.y || 0, position.z],
+            position_x: position.x,
+            position_y: position.y || 0,
+            position_z: position.z,
+          },
         },
         messages: [
           ...state.messages,

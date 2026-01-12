@@ -6,11 +6,6 @@ import './App.css'
 function App() {
   const [shapes, setShapes] = useState<any[]>([])
 
-  // 处理来自后端的响应，更新场景
-  const handleShapeUpdate = (newShapes: any[]) => {
-    setShapes(newShapes)
-  }
-
   return (
     <div className="app">
       {/* 左侧：Three.js 场景 */}
@@ -20,7 +15,7 @@ function App() {
 
       {/* 右侧：对话框 */}
       <div className="chat-container">
-        <ChatPanel onShapeUpdate={handleShapeUpdate} />
+        <ChatPanel onShapeUpdate={setShapes} />
       </div>
     </div>
   )
