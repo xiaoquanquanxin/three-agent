@@ -48,7 +48,7 @@ function ThreeScene({ shapes }: ThreeSceneProps) {
     controlsRef.current = controls
 
     // 添加网格地面
-    const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x222222)
+    const gridHelper = new THREE.GridHelper(50, 50, 0xaaaaaa, 0x555555)
     scene.add(gridHelper)
 
     // 添加坐标轴辅助
