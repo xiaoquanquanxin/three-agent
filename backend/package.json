@@ -9,26 +9,32 @@
     "start": "node dist/index.js",
     "db:init": "tsx src/database/init.ts"
   },
-  "keywords": ["langgraph", "three.js", "agent"],
+  "keywords": [
+    "langgraph",
+    "three.js",
+    "agent"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@langchain/core": "^0.3.29",
-    "@langchain/langgraph": "^0.2.30",
-    "@langchain/openai": "^0.3.16",
-    "better-sqlite3": "^11.8.1",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "uuid": "^11.0.4"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.10.5",
+    "@langchain/core": "^1.1.12",
+    "@langchain/langgraph": "^1.0.15",
+    "@langchain/langgraph-cli": "^1.1.11",
+    "@langchain/langgraph-sdk": "^1.5.2",
+    "@langchain/openai": "^1.2.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.0.6",
     "@types/uuid": "^10.0.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "better-sqlite3": "^12.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "langchain": "^1.2.7",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.5"
   }
 }

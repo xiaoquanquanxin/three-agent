@@ -4,3 +4,6 @@ dist/
 *.log
 .env.local
 .DS_Store
+
+# LangGraph API
+.langgraph_api
