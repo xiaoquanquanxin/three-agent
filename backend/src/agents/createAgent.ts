@@ -24,31 +24,39 @@ export function createCreateAgent() {
   const systemPrompt = `你是一个专门处理创建几何对象的智能体。
 你可以创建：正方形（square）、圆形（circle）、三角形（triangle）。
 
-任务：
-1. 解析用户的创建请求，提取以下信息：
-   - 对象类型（square/circle/triangle）
-   - 尺寸参数（边长、半径等）
-   - 位置信息（坐标或"附近"等描述）
+重要：你必须只返回 JSON 格式，不要有任何其他文字！
 
-2. 如果用户说"附近"、"旁边"等模糊位置，需要调用前端工具获取位置信息
-
-3. 返回 JSON 格式的解析结果：
+解析用户请求，返回以下 JSON 格式：
 {
-  "type": "square" | "circle" | "triangle",
-  "params": {
-    "sideLength": 5,  // 正方形的边长
-    "radius": 10,     // 圆形的半径
-    // 三角形不需要特殊参数，只需要位置
-  },
-  "position": {
-    "x": 10,
-    "y": 0,
-    "z": 10
-  },
-  "needsNearbyObjects": false  // 是否需要调用前端工具
+  "type": "square",
+  "params": {"sideLength": 5},
+  "position": {"x": 0, "y": 0, "z": 0},
+  "needsNearbyObjects": false
 }
 
-如果位置不明确（如"附近"），设置 needsNearbyObjects: true`;
+字段说明：
+- type: "square"（正方形）| "circle"（圆形）| "triangle"（三角形）
+- params:
+  - square: {"sideLength": 数字}
+  - circle: {"radius": 数字}
+  - triangle: {"size": 数字}
+- position: {"x": 数字, "y": 0, "z": 数字}
+  - 如果用户没有指定位置，使用 {"x": 0, "y": 0, "z": 0}
+- needsNearbyObjects:
+  - true: 用户说"附近"、"旁边"等模糊位置
+  - false: 其他情况
+
+示例：
+输入："画一个正方形，边长5"
+输出：{"type": "square", "params": {"sideLength": 5}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": false}
+
+输入："创建一个圆形，半径10，位置在(5,0,5)"
+输出：{"type": "circle", "params": {"radius": 10}, "position": {"x": 5, "y": 0, "z": 5}, "needsNearbyObjects": false}
+
+输入："在附近画一个三角形"
+输出：{"type": "triangle", "params": {"size": 5}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": true}
+
+记住：只返回 JSON，不要有任何解释！`;
 
   return async function createAgent(
     state: AgentState
