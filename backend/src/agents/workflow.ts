@@ -37,7 +37,7 @@ export function createWorkflow() {
     ends: ['create_agent', 'delete_agent', 'modify_agent', 'query_agent', '__end__'],
   });
   builder.addNode('create_agent', createCreateAgent(), {
-    ends: ['supervisor'],
+    ends: ['supervisor', '__end__'],  // 允许直接结束（用于 interrupt）
   });
   builder.addNode('delete_agent', createDeleteAgent(), {
     ends: ['supervisor'],
@@ -54,9 +54,53 @@ export function createWorkflow() {
 
   // 编译图（使用 MemorySaver 作为 checkpoint）
   const checkpointer = new MemorySaver();
-  const graph = builder.compile({ checkpointer });
+  const compiledGraph = builder.compile({ checkpointer });
 
   console.log('✅ LangGraph workflow 构建完成');
 
-  return graph;
+  return compiledGraph;
 }
+
+// 导出 graph 供 langgraph dev 使用
+console.log('🔧 构建 LangGraph workflow for langgraph dev...');
+
+const builder = new StateGraph<AgentState>({
+  channels: {
+    messages: {
+      reducer: (x, y) => x.concat(y),
+      default: () => [],
+    },
+    sessionId: {
+      default: () => '',
+    },
+    threadId: null,
+    intent: null,
+    next_agent: null,
+    current_task: null,
+    tempData: null,
+    referencedObjects: null,
+  },
+});
+
+builder.addNode('supervisor', createSupervisorAgent(), {
+  ends: ['create_agent', 'delete_agent', 'modify_agent', 'query_agent', '__end__'],
+});
+builder.addNode('create_agent', createCreateAgent(), {
+  ends: ['supervisor', '__end__'],
+});
+builder.addNode('delete_agent', createDeleteAgent(), {
+  ends: ['supervisor'],
+});
+builder.addNode('modify_agent', createModifyAgent(), {
+  ends: ['supervisor'],
+});
+builder.addNode('query_agent', createQueryAgent(), {
+  ends: ['supervisor'],
+});
+
+builder.addEdge(START, 'supervisor');
+
+const checkpointer = new MemorySaver();
+export const graph = builder.compile({ checkpointer });
+
+console.log('✅ Graph 导出完成');

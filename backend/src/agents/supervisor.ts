@@ -48,6 +48,20 @@ export function createSupervisorAgent() {
     console.log('\n🎯 Supervisor Agent: 分析用户意图...');
 
     const messages = state.messages;
+
+    // 检测 Continue 请求（前端工具执行后的恢复）
+    if (state.tempData?.operationParams && state.tempData?.nearbyObjects !== undefined) {
+      console.log('🔄 检测到 Continue 请求，直接路由到 create_agent');
+      return new Command({
+        goto: 'create_agent',
+        update: {
+          intent: 'create',
+          tempData: state.tempData,
+          messages: state.messages,
+        },
+      });
+    }
+
     const userRequest = messages[messages.length - 1].content;
 
     // 构建 LLM 输入
@@ -61,9 +75,6 @@ export function createSupervisorAgent() {
     // 调用 LLM
     const response = await llm.invoke(llmMessages);
     const responseContent = response.content as string;
-
-    // 调试日志：输出 LLM 原始回复
-    console.log(`📝 LLM 原始回复: "${responseContent}"`);
 
     // 解析 LLM 回复，确定下一个 Agent
     let nextAgent: NextAgent;

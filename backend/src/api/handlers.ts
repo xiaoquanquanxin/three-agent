@@ -14,25 +14,45 @@ const workflow = createWorkflow();
  */
 export async function handleChat(req: Request, res: Response) {
   try {
-    const { message, sessionId, threadId } = req.body;
+    const { message, sessionId, threadId, toolResult, tempData } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ error: '缺少 message 参数' });
+    if (!message && !toolResult) {
+      return res.status(400).json({ error: '缺少 message 或 toolResult 参数' });
     }
 
     const actualSessionId = sessionId || generateId();
-    const actualThreadId = threadId || generateId();
+    // 重要：新消息时总是生成新的 threadId（避免消息累积）
+    // 只有 continue 请求（有 toolResult）时才复用 threadId
+    const actualThreadId = toolResult && threadId ? threadId : generateId();
 
-    console.log(`\n📨 收到消息: "${message}"`);
-    console.log(`   Session: ${actualSessionId}`);
-    console.log(`   Thread: ${actualThreadId}`);
+    if (message) {
+      console.log(`\n📨 收到消息: "${message.substring(0, 50)}..."`);
+    } else {
+      console.log(`\n🔄 收到 continue 请求`);
+    }
 
     // 初始化状态
-    const initialState: AgentState = {
-      messages: [new HumanMessage(message)],
-      sessionId: actualSessionId,
-      threadId: actualThreadId,
-    };
+    let initialState: AgentState;
+
+    if (toolResult) {
+      // Continue 请求：恢复完整的 tempData（包括 operationParams 等）
+      // 不传递 messages，让 workflow 从 checkpoint 恢复
+      initialState = {
+        messages: [],
+        sessionId: actualSessionId,
+        threadId: actualThreadId,
+        tempData: tempData || {
+          nearbyObjects: toolResult,
+        },
+      };
+    } else {
+      // 新请求：正常初始化
+      initialState = {
+        messages: [new HumanMessage(message)],
+        sessionId: actualSessionId,
+        threadId: actualThreadId,
+      };
+    }
 
     // 执行 workflow
     const result = await workflow.invoke(initialState, {
@@ -40,6 +60,21 @@ export async function handleChat(req: Request, res: Response) {
     });
 
     console.log('✅ Workflow 执行完成');
+
+    // 检查是否需要前端工具（简化的 interrupt）
+    if (result.tempData?.needsFrontendTool) {
+      console.log('⏸️ 需要前端工具，返回 interrupted 响应');
+
+      return res.json({
+        status: 'interrupted',
+        action: result.tempData.frontendToolAction,
+        params: result.tempData.frontendToolParams,
+        threadId: actualThreadId,
+        sessionId: actualSessionId,
+        // 返回完整的 tempData，供前端 continue 时使用
+        tempData: result.tempData,
+      });
+    }
 
     // 获取最后一条 assistant 消息（跳过系统消息）
     let responseMessage = '执行完成';
@@ -52,7 +87,6 @@ export async function handleChat(req: Request, res: Response) {
       }
     }
 
-    // 构造响应（按照接口协议）
     const response: any = {
       status: 'completed',
       message: responseMessage,
@@ -74,12 +108,7 @@ export async function handleChat(req: Request, res: Response) {
       response.action = 'none';
     }
 
-    console.log('📤 返回响应:', JSON.stringify({
-      status: response.status,
-      action: response.action,
-      hasData: !!response.data,
-      message: response.message.substring(0, 50),
-    }));
+    console.log(`✅ 返回响应: ${response.action}`);
 
     // 返回响应
     res.json(response);

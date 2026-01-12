@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
@@ -6,13 +6,48 @@ interface ThreeSceneProps {
   shapes: any[]
 }
 
-function ThreeScene({ shapes }: ThreeSceneProps) {
+export interface ThreeSceneRef {
+  getNearbyObjects: (x: number, y: number, z: number, radius?: number) => any[]
+}
+
+const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) => {
   const mountRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
   const shapesMapRef = useRef<Map<string, THREE.Mesh>>(new Map())
+
+  // 暴露方法给父组件
+  useImperativeHandle(ref, () => ({
+    getNearbyObjects: (x: number, y: number, z: number, radius: number = 10) => {
+      console.log(`🔍 getNearbyObjects: 搜索坐标(${x}, ${y}, ${z})附近半径${radius}内的对象`)
+
+      const targetPos = new THREE.Vector3(x, y, z)
+      const results: any[] = []
+
+      shapesMapRef.current.forEach((mesh) => {
+        const distance = mesh.position.distanceTo(targetPos)
+        if (distance <= radius) {
+          const shapeData = shapes.find(s => s.id === mesh.userData.id)
+          if (shapeData) {
+            results.push({
+              id: mesh.userData.id,
+              type: mesh.userData.type,
+              position: [mesh.position.x, mesh.position.y, mesh.position.z],
+              distance: distance,
+            })
+          }
+        }
+      })
+
+      // 按距离排序
+      results.sort((a, b) => a.distance - b.distance)
+      console.log(`✅ 找到 ${results.length} 个对象:`, results)
+
+      return results
+    },
+  }))
 
   // 初始化 Three.js 场景
   useEffect(() => {
@@ -134,7 +169,9 @@ function ThreeScene({ shapes }: ThreeSceneProps) {
   }, [shapes])
 
   return <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
-}
+})
+
+ThreeScene.displayName = 'ThreeScene'
 
 /**
  * 根据形状数据创建 Three.js Mesh

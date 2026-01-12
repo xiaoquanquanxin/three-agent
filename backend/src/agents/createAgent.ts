@@ -71,12 +71,6 @@ export function createCreateAgent() {
   ): Promise<Command<'supervisor'>> {
     console.log('\n🎨 CreateAgent: 处理创建对象请求...');
 
-    // 调试：打印所有消息
-    console.log('📋 所有消息:');
-    state.messages.forEach((m: any, i: number) => {
-      console.log(`  [${i}] role: ${m.role || m._getType()}, content: "${String(m.content).substring(0, 50)}..."`);
-    });
-
     // 找到最后一条真正的用户消息（跳过系统消息和 Supervisor 的路由消息）
     let userRequest = '';
     for (let i = state.messages.length - 1; i >= 0; i--) {
@@ -96,7 +90,7 @@ export function createCreateAgent() {
       }
     }
 
-    console.log(`👤 提取的用户请求: "${userRequest}"`);
+    console.log(`👤 用户请求: "${userRequest.substring(0, 50)}..."`);
 
     // 如果没有找到用户请求，返回错误
     if (!userRequest) {
@@ -129,9 +123,6 @@ export function createCreateAgent() {
       const response = await llm.invoke(llmMessages);
       const responseContent = response.content as string;
 
-      // 调试日志：输出 LLM 原始回复
-      console.log(`📝 LLM 原始回复: "${responseContent}"`);
-
       // 解析 LLM 返回的 JSON
       let parsedData;
       try {
@@ -158,8 +149,7 @@ export function createCreateAgent() {
         });
       }
 
-      console.log('✅ 解析结果:', parsedData);
-      console.log('📊 解析的类型:', parsedData.type);
+      console.log('✅ 解析结果:', parsedData.type, parsedData.params);
 
       // 规范化类型（处理可能的中文或其他变体）
       const typeMap: Record<string, string> = {
@@ -191,20 +181,37 @@ export function createCreateAgent() {
       }
 
       parsedData.type = normalizedType;
-      console.log('✅ 规范化后的类型:', normalizedType);
 
       // 检查是否需要前端工具
       if (parsedData.needsNearbyObjects) {
-        console.log('⏸️  需要前端工具获取附近对象，触发 interrupt...');
+        console.log('⏸️ 需要前端工具获取附近对象，标记需要 interrupt...');
 
-        // 触发 interrupt，调用前端工具
-        return interrupt({
-          action: 'getNearbyObjects',
-          params: {
-            x: parsedData.position?.x || 0,
-            y: parsedData.position?.y || 0,
-            z: parsedData.position?.z || 0,
-            radius: 10,
+        // 直接结束 workflow，让 API handler 返回 interrupted 状态
+        return new Command({
+          goto: '__end__',  // 直接结束，不回到 supervisor
+          update: {
+            intent: 'create',
+            tempData: {
+              ...state.tempData,
+              // 标记需要前端工具
+              needsFrontendTool: true,
+              frontendToolAction: 'getNearbyObjects',
+              frontendToolParams: {
+                x: parsedData.position?.x || 0,
+                y: parsedData.position?.y || 0,
+                z: parsedData.position?.z || 0,
+                radius: 10,
+              },
+              // 保存解析结果，等待恢复时使用
+              operationParams: parsedData,
+            },
+            messages: [
+              ...state.messages,
+              {
+                role: 'system',
+                content: 'CreateAgent: 需要前端工具 getNearbyObjects',
+              } as any,
+            ],
           },
         });
       }
@@ -213,8 +220,8 @@ export function createCreateAgent() {
       return await executeCreate(state, parsedData);
     }
 
-    // 第二次进入：从 interrupt 恢复，使用前端返回的数据
-    console.log('▶️  从 interrupt 恢复，使用前端返回的数据');
+    // 第二次进入：收到前端工具结果，继续执行
+    console.log('▶️ 收到前端工具结果，继续执行');
 
     const nearbyObjects = state.tempData.nearbyObjects || [];
     const operationParams = state.tempData.operationParams!;
@@ -223,7 +230,7 @@ export function createCreateAgent() {
     let position = operationParams.position;
     if (nearbyObjects.length > 0) {
       // 简单策略：在附近找一个空位
-      const offset = 5;
+      const offset = 8;
       position = {
         x: nearbyObjects[0].position[0] + offset,
         y: 0,
@@ -307,7 +314,6 @@ async function executeCreate(
       update: {
         intent: 'create', // 保留 intent
         tempData: {
-          ...state.tempData,
           targetObjectId: id,
           createdObject: {
             id,
@@ -318,6 +324,12 @@ async function executeCreate(
             position_y: position.y || 0,
             position_z: position.z,
           },
+          // 清除所有中间状态，避免重复执行
+          needsFrontendTool: false,
+          frontendToolAction: undefined,
+          frontendToolParams: undefined,
+          operationParams: undefined,
+          nearbyObjects: undefined,
         },
         messages: [
           ...state.messages,
