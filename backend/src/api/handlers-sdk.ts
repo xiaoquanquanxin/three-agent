@@ -152,12 +152,28 @@ export async function handleChatSDK(req: Request, res: Response) {
     }
 
     // 提取最后一条 assistant 消息
-    let assistantMessage = '执行完成';
+    let assistantMessage = '';
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (msg.role === 'assistant' || msg._getType?.() === 'assistant') {
+      const msgType = msg.type || msg.role || msg._getType?.();
+      if (msgType === 'assistant' || msgType === 'ai') {
         assistantMessage = String(msg.content);
         break;
+      }
+    }
+
+    // 如果没有找到 assistant 消息，使用 action 生成默认消息
+    if (!assistantMessage) {
+      const typeMap: Record<string, string> = { square: '正方形', circle: '圆形', triangle: '三角形' };
+      if (intent === 'create' && stateTempData?.createdObject) {
+        const obj = stateTempData.createdObject;
+        assistantMessage = `已创建${typeMap[obj.type] || obj.type}`;
+      } else if (intent === 'delete' && stateTempData?.targetObjectId) {
+        assistantMessage = `已删除对象`;
+      } else if (intent === 'modify' && stateTempData?.modifiedObject) {
+        assistantMessage = `已修改对象`;
+      } else {
+        assistantMessage = '执行完成';
       }
     }
 
@@ -222,10 +238,33 @@ export async function handleChatSDKContinue(req: Request, res: Response) {
     // 返回结果
     const intent = lastValue?.intent;
     const tempData = lastValue?.tempData;
+    const messages = lastValue?.messages || [];
+
+    // 提取最后一条 assistant 消息
+    let assistantMessage = '';
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      const msgType = msg.type || msg.role || msg._getType?.();
+      if (msgType === 'assistant' || msgType === 'ai') {
+        assistantMessage = String(msg.content);
+        break;
+      }
+    }
+
+    // 如果没有找到 assistant 消息，使用 action 生成默认消息
+    if (!assistantMessage) {
+      if (intent === 'delete' && tempData?.targetObjectId) {
+        assistantMessage = `已删除对象`;
+      } else if (intent === 'modify' && tempData?.modifiedObject) {
+        assistantMessage = `已修改对象`;
+      } else {
+        assistantMessage = '执行完成';
+      }
+    }
 
     const response: any = {
       status: 'completed',
-      message: '执行完成',
+      message: assistantMessage,
       sessionId,
       threadId,
     };
