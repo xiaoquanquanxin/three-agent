@@ -71,6 +71,26 @@ export interface AgentState {
      * 操作参数（如边长、半径、位置等）
      */
     operationParams?: Record<string, any>;
+
+    // --- 已创建/修改的对象 ---
+    /**
+     * 已创建的对象
+     */
+    createdObject?: {
+      id: string;
+      type: 'square' | 'circle' | 'triangle';
+      position: [number, number, number];
+      [key: string]: any;
+    };
+
+    /**
+     * 已修改的对象
+     */
+    modifiedObject?: {
+      id: string;
+      type: string;
+      [key: string]: any;
+    };
   };
 
   // ===== 引用栈（优化阶段添加，用于"上一个正方形"） =====

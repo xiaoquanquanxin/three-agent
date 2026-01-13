@@ -1,20 +1,12 @@
 import { Router } from 'express';
-// import { handleChat, handleGetShapes } from './handlers';  // 旧版 - 已注释
 import { handleChatSDK, handleChatSDKContinue } from './handlers-sdk';
-import { handleGetShapes } from './handlers';  // 保留 handleGetShapes，用于获取形状列表
+import { handleGetShapes } from './handlers';
 
 const router = Router();
 
 /**
- * POST /api/chat
- * 处理用户输入（旧版 - 直接 invoke）
- * 已注释，使用 SDK 方式
- */
-// router.post('/chat', handleChat);
-
-/**
  * POST /api/chat-sdk
- * 处理用户输入（新版 - 使用 SDK）
+ * 处理用户输入（SDK 方式）
  */
 router.post('/chat-sdk', handleChatSDK);
 
