@@ -20,24 +20,26 @@
   "dependencies": {
     "@langchain/core": "^1.1.12",
     "@langchain/langgraph": "^1.0.15",
-    "@langchain/langgraph-cli": "^1.1.11",
     "@langchain/langgraph-sdk": "^1.5.2",
     "@langchain/openai": "^1.2.1",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/ioredis": "^4.28.10",
-    "@types/node": "^25.0.6",
-    "@types/uuid": "^10.0.0",
     "better-sqlite3": "^12.6.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "ioredis": "^5.9.1",
     "langchain": "^1.2.7",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
     "uuid": "^13.0.0",
     "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@langchain/langgraph-cli": "^1.1.11",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/ioredis": "^4.28.10",
+    "@types/node": "^25.0.6",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }
