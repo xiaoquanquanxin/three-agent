@@ -8,6 +8,7 @@ interface ThreeSceneProps {
 
 export interface ThreeSceneRef {
   getNearbyObjects: (x: number, y: number, z: number, radius?: number) => any[]
+  getObjectsByType: (type: string) => any[]
 }
 
 const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) => {
@@ -44,6 +45,28 @@ const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) 
       // 按距离排序
       results.sort((a, b) => a.distance - b.distance)
       console.log(`✅ 找到 ${results.length} 个对象:`, results)
+
+      return results
+    },
+    getObjectsByType: (type: string) => {
+      console.log(`🔍 getObjectsByType: 搜索类型为 ${type} 的对象`)
+
+      const results: any[] = []
+
+      shapesMapRef.current.forEach((mesh) => {
+        if (mesh.userData.type === type) {
+          const shapeData = shapes.find(s => s.id === mesh.userData.id)
+          if (shapeData) {
+            results.push({
+              id: mesh.userData.id,
+              type: mesh.userData.type,
+              position: [mesh.position.x, mesh.position.y, mesh.position.z],
+            })
+          }
+        }
+      })
+
+      console.log(`✅ 找到 ${results.length} 个 ${type} 对象:`, results)
 
       return results
     },

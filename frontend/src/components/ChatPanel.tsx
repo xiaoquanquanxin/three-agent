@@ -19,7 +19,6 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
   const [loading, setLoading] = useState(false)
   const [sessionId] = useState(() => generateId())
   const [threadId, setThreadId] = useState<string | null>(null)
-  const [savedTempData, setSavedTempData] = useState<any>(null)  // 保存 tempData 用于 continue
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 滚动到最新消息
@@ -74,12 +73,9 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
       if (data.status === 'interrupted') {
         console.log('⏸️ 收到 interrupt，需要执行前端工具:', data.action)
 
-        // 保存 threadId 和 tempData 用于 continue
+        // 保存 threadId
         if (data.threadId) {
           setThreadId(data.threadId)
-        }
-        if (data.tempData) {
-          setSavedTempData(data.tempData)
         }
 
         // 执行前端工具
@@ -135,21 +131,29 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 
   // 处理 interrupt，执行前端工具
   async function handleInterrupt(interruptData: any) {
-    const { action, params, threadId: interruptThreadId, tempData: interruptTempData } = interruptData
+    const { action, params, threadId: interruptThreadId } = interruptData
 
     console.log('🔧 执行前端工具:', action, params)
 
     let toolResult: any = null
 
     // 根据 action 调用相应的前端工具
+    debugger
     if (action === 'getNearbyObjects' && sceneRef.current) {
       const { x, y, z, radius } = params
       toolResult = sceneRef.current.getNearbyObjects(x, y, z, radius)
+    } else if (action === 'getObjectsByType' && sceneRef.current) {
+      const { type } = params
+      toolResult = sceneRef.current.getObjectsByType(type)
     }
+    // TODO: 添加其他前端工具
+    // else if (action === 'getLastCreated' && sceneRef.current) {
+    //   toolResult = sceneRef.current.getLastCreated(params.type)
+    // }
 
     console.log('📤 工具执行结果:', toolResult)
 
-    // 发送 continue 请求（带 toolResult和完整 tempData，不带 message）
+    // 发送 continue 请求
     try {
       const response = await fetch('/api/chat-sdk/continue', {
         method: 'POST',
@@ -157,7 +161,7 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
         body: JSON.stringify({
           threadId: interruptThreadId || threadId,
           sessionId,
-          toolResult,  // 带上工具结果
+          toolResult,
         }),
       })
 
@@ -185,10 +189,18 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      // 根据 action 更新场景
+      // 根据 action 更新场景（处理所有 action 类型）
       if (data.action === 'create' && data.data) {
         console.log('✅ 收到创建响应（interrupt后），添加对象:', data.data)
         onShapeUpdate((prevShapes) => [...prevShapes, data.data])
+      } else if (data.action === 'delete' && data.targetId) {
+        console.log('✅ 收到删除响应（interrupt后），移除对象:', data.targetId)
+        onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
+      } else if (data.action === 'modify' && data.data) {
+        console.log('✅ 收到修改响应（interrupt后），更新对象:', data.data)
+        onShapeUpdate((prevShapes) =>
+          prevShapes.map(s => s.id === data.data.id ? data.data : s)
+        )
       }
     } catch (error) {
       console.error('Continue 请求失败:', error)
