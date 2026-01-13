@@ -1,17 +1,18 @@
 import { Request, Response } from 'express';
-import { HumanMessage } from '@langchain/core/messages';
-import { createWorkflow } from '../agents/workflow';
-import { AgentState } from '../types';
-import { generateId } from '../utils/uuid';
+// import { HumanMessage } from '@langchain/core/messages';  // 旧版 - 已注释
+// import { createWorkflow } from '../agents/workflow';  // 旧版 - 已注释
+// import { AgentState } from '../types';  // 旧版 - 已注释
+// import { generateId } from '../utils/uuid';  // 旧版 - 已注释
 import { getAllShapes } from '../database/operations';
 
-// 创建 workflow 实例
-const workflow = createWorkflow();
+// 创建 workflow 实例（旧版 - 已注释）
+// const workflow = createWorkflow();
 
 /**
  * POST /api/chat
- * 处理用户输入，执行 workflow
+ * 处理用户输入，执行 workflow（旧版 - 已注释，使用 SDK 方式）
  */
+/* 旧版 - 已注释
 export async function handleChat(req: Request, res: Response) {
   try {
     const { message, sessionId, threadId, toolResult, tempData } = req.body;
@@ -120,6 +121,7 @@ export async function handleChat(req: Request, res: Response) {
     });
   }
 }
+*/
 
 /**
  * GET /api/shapes

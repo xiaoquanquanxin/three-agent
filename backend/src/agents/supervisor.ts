@@ -102,6 +102,31 @@ export function createSupervisorAgent() {
       console.log(`🎯 用户意图: ${intent}`);
     }
 
+    // 如果是无关请求（__end__ 且没有已完成的任务），添加友好提示
+    const shouldShowHelp = nextAgent === '__end__' && !state.intent;
+    const helpMessage = shouldShowHelp
+      ? `抱歉，我只能帮你编辑 3D 场景。我可以做的事情包括：
+
+✨ 创建对象
+• "画一个正方形，边长 5"
+• "创建一个圆形，半径 10"
+• "绘制一个三角形"
+
+🗑️ 删除对象
+• "删除坐标 (10, 0, 10) 附近的对象"
+• "移除最后创建的正方形"
+
+✏️ 修改对象
+• "修改上一个正方形的边长为 8"
+• "把那个圆形的半径改成 15"
+
+📊 查询信息
+• "场景中有几个对象？"
+• "列举所有的形状"
+
+请告诉我你想做什么吧！`
+      : `Supervisor: 路由到 ${nextAgent}`;
+
     // 返回 Command，路由到下一个 Agent
     return new Command({
       goto: nextAgent,
@@ -115,8 +140,8 @@ export function createSupervisorAgent() {
         messages: [
           ...state.messages,
           {
-            role: 'system',
-            content: `Supervisor: 路由到 ${nextAgent}`,
+            role: shouldShowHelp ? 'assistant' : 'system',
+            content: helpMessage,
           } as any,
         ],
       },

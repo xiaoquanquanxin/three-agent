@@ -27,3 +27,5 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+# LangGraph API
+.langgraph_api

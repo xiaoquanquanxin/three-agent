@@ -58,7 +58,7 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/chat-sdk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -151,19 +151,13 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 
     // 发送 continue 请求（带 toolResult和完整 tempData，不带 message）
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/chat-sdk/continue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           threadId: interruptThreadId || threadId,
           sessionId,
           toolResult,  // 带上工具结果
-          tempData: {
-            ...interruptTempData,  // 使用 interrupt 响应中的 tempData（包含 operationParams）
-            nearbyObjects: toolResult,  // 更新 nearbyObjects
-            needsFrontendTool: false,  // 标记工具已执行
-          },
-          // 注意：不传 message
         }),
       })
 

@@ -8,6 +8,8 @@ import { createQueryAgent } from './queryAgent';
 
 /**
  * 创建 Three-Agent workflow
+ * 注意：此文件用于 LangGraph SDK 服务器（langgraph dev）
+ * 前端通过 SDK 调用，不再直接使用 createWorkflow()
  * 参考：demo/supervisor.ts
  */
 export function createWorkflow() {

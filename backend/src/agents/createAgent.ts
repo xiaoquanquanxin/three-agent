@@ -299,7 +299,7 @@ async function executeCreate(
 
     // 记录操作历史
     recordOperation({
-      session_id: state.sessionId,
+      session_id: state.sessionId || 'default',  // 提供默认值避免 NOT NULL 错误
       shape_id: id,
       operation: 'create',
       before_state: null,

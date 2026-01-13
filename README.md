@@ -40,3 +40,17 @@
         * 这里和之前的所有需求不同，所以这里是要用另一个 agent，也就是说，要有一个 supervisor agent 分析用户的需求需要用哪个 agent 去做
         * llm 分析后发出请求（给前端）{"tool":"showSquare" 或 "showAllTrangle"... }
 
+
+### 启动命令
+
+**后端（Langgraph）**
+```bash
+cd backend
+npx @langchain/langgraph-cli dev
+```
+
+**前端**
+```bash
+cd frontend
+npm run dev
+```
