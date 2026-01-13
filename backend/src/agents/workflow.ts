@@ -45,7 +45,7 @@ builder.addNode('modify_agent', createModifyAgent(), {
   ends: ['supervisor'],
 });
 builder.addNode('query_agent', createQueryAgent(), {
-  ends: ['supervisor'],
+  ends: ['__end__'],
 });
 
 builder.addEdge(START, 'supervisor');

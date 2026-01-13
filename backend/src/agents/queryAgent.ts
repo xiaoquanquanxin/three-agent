@@ -10,9 +10,6 @@ export function createQueryAgent() {
   return async function queryAgent(
     state: AgentState
   ): Promise<Command<'supervisor'>> {
-    console.log('\n🔍 QueryAgent: 处理查询请求...');
-
-    // 简化版：查询所有对象
     try {
       const shapes = getAllShapes();
 
@@ -29,11 +26,13 @@ ${Object.entries(summary)
   })
   .join('\n')}`;
 
-      console.log('✅ 查询成功');
+      console.log(`✅ QUERY: ${shapes.length} objects`);
 
       return new Command({
-        goto: 'supervisor',
+        goto: '__end__',
         update: {
+          intent: undefined,
+          tempData: {},
           messages: [
             ...state.messages,
             {
@@ -44,10 +43,11 @@ ${Object.entries(summary)
         },
       });
     } catch (error) {
-      console.error('❌ 查询失败:', error);
       return new Command({
-        goto: 'supervisor',
+        goto: '__end__',
         update: {
+          intent: undefined,
+          tempData: {},
           messages: [
             ...state.messages,
             {
