@@ -13,7 +13,11 @@ const ASSISTANT_ID = 'agent';
 const CreatedObjectSchema = z.object({
   id: z.string(),
   type: z.enum(['square', 'circle', 'triangle']),
+  vertexList: z.any(),
   position: z.tuple([z.number(), z.number(), z.number()]).optional(),
+  position_x: z.number().optional(),
+  position_y: z.number().optional(),
+  position_z: z.number().optional(),
 });
 
 const TempDataSchema = z.object({
@@ -79,11 +83,7 @@ export async function handleChatSDK(req: Request, res: Response) {
     if (!actualThreadId) {
       const thread = await client.threads.create();
       actualThreadId = thread.thread_id;
-      console.log(`\n🆕 SDK: 创建新 thread: ${actualThreadId}`);
     }
-
-    console.log(`\n📨 SDK: 收到消息: "${message.substring(0, 50)}..."`);
-    console.log(`   Thread: ${actualThreadId}`);
 
     // 使用 SDK 调用 workflow
     const streamResponse = client.runs.stream(
@@ -91,8 +91,8 @@ export async function handleChatSDK(req: Request, res: Response) {
       ASSISTANT_ID,
       {
         input: { messages: [{ role: 'user', content: message }] },
-        streamMode: 'values',
-        multitaskStrategy: 'reject',  // 拒绝并发请求，确保单线程执行
+        streamMode: ['values', 'updates'],  // 同时监听 values 和 updates
+        multitaskStrategy: 'reject',
       }
     );
 
@@ -101,16 +101,25 @@ export async function handleChatSDK(req: Request, res: Response) {
 
     // 处理流式响应
     for await (const chunk of streamResponse) {
-      console.log('📦 收到 chunk:', chunk.event);
-
       if (chunk.event === 'values') {
         lastValue = chunk.data;
+        
+        // 检查 values 中的 __interrupt__
+        if (lastValue?.__interrupt__ && lastValue.__interrupt__.length > 0) {
+          interruptData = lastValue.__interrupt__[0];
+        }
       }
 
-      // 检测 interrupt
+      if (chunk.event === 'updates') {
+        // 检查 updates 中的 __interrupt__
+        if (chunk.data?.__interrupt__ && chunk.data.__interrupt__.length > 0) {
+          interruptData = chunk.data.__interrupt__[0];
+        }
+      }
+
+      // 检测 interrupt event（兼容）
       if (chunk.event === 'interrupt') {
         interruptData = chunk.data;
-        console.log('⏸️ SDK: 检测到 interrupt');
         break;
       }
     }
@@ -119,7 +128,7 @@ export async function handleChatSDK(req: Request, res: Response) {
     if (interruptData) {
       return res.json({
         status: 'interrupted',
-        action: interruptData.value?.action || 'getNearbyObjects',
+        action: interruptData.value?.action || 'unknown',
         params: interruptData.value?.params || {},
         threadId: actualThreadId,
         sessionId: actualSessionId,
@@ -128,8 +137,19 @@ export async function handleChatSDK(req: Request, res: Response) {
 
     // 正常完成，返回结果
     const intent = lastValue?.intent;
-    const tempData = lastValue?.tempData;
+    const stateTempData = lastValue?.tempData;
     const messages = lastValue?.messages || [];
+
+    // 检查 stateTempData 中是否有前端工具请求（兼容旧方式）
+    if (stateTempData?.needsFrontendTool) {
+      return res.json({
+        status: 'interrupted',
+        action: stateTempData.frontendToolAction || 'unknown',
+        params: stateTempData.frontendToolParams || {},
+        threadId: actualThreadId,
+        sessionId: actualSessionId,
+      });
+    }
 
     // 提取最后一条 assistant 消息
     let assistantMessage = '执行完成';
@@ -150,9 +170,7 @@ export async function handleChatSDK(req: Request, res: Response) {
 
     // 使用动态映射处理 action
     const handler = ACTION_MAP[intent as keyof typeof ACTION_MAP] || ACTION_MAP.default;
-    Object.assign(response, handler(tempData));
-
-    console.log(`✅ SDK: 返回响应: ${response.action}`);
+    Object.assign(response, handler(stateTempData));
 
     res.json(response);
   } catch (error: any) {
@@ -176,16 +194,19 @@ export async function handleChatSDKContinue(req: Request, res: Response) {
       return res.status(400).json({ error: '缺少 threadId 或 toolResult 参数' });
     }
 
-    console.log(`\n🔄 SDK: 收到 continue 请求`);
-    console.log(`   Thread: ${threadId}`);
-
-    // Resume workflow
+    // Resume workflow - 将 toolResult 合并到 tempData
     const streamResponse = client.runs.stream(
       threadId,
       ASSISTANT_ID,
       {
-        input: toolResult,
-        streamMode: 'values',
+        input: {
+          tempData: {
+            nearbyObjects: toolResult,
+            objectsByType: toolResult,
+            operationParams: { resumed: true },  // 标记已恢复，避免重复 interrupt
+          },
+        },
+        streamMode: ['values', 'updates'],
         multitaskStrategy: 'reject',
       }
     );
@@ -212,8 +233,6 @@ export async function handleChatSDKContinue(req: Request, res: Response) {
     // 使用动态映射处理 action
     const handler = ACTION_MAP[intent as keyof typeof ACTION_MAP] || ACTION_MAP.default;
     Object.assign(response, handler(tempData));
-
-    console.log(`✅ SDK: Continue 完成: ${response.action}`);
 
     res.json(response);
   } catch (error: any) {

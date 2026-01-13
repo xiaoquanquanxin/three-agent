@@ -70,6 +70,15 @@ export function createCreateAgent() {
     state: AgentState
   ): Promise<Command<'supervisor'>> {
     console.log('\n🎨 CreateAgent: 处理创建对象请求...');
+    
+    // 如果 intent 不是 create，直接返回
+    if (state.intent !== 'create') {
+      console.log(`⚠️ CreateAgent: intent 是 ${state.intent}，不处理`);
+      return new Command({
+        goto: 'supervisor',
+        update: { messages: state.messages },
+      });
+    }
 
     // 找到最后一条真正的用户消息（跳过系统消息和 Supervisor 的路由消息）
     let userRequest = '';
@@ -110,7 +119,7 @@ export function createCreateAgent() {
     }
 
     // 第一次进入：解析用户请求
-    if (!state.tempData?.operationParams) {
+    if (!state.tempData?.operationParams || state.tempData.operationParams.resumed) {
       console.log('📝 解析用户请求...');
 
       const llmMessages = [
@@ -318,7 +327,7 @@ async function executeCreate(
           createdObject: {
             id,
             type,
-            vertexList,
+            vertexList,  // 添加 vertexList
             position: [position.x, position.y || 0, position.z],
             position_x: position.x,
             position_y: position.y || 0,

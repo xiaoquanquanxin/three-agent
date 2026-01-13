@@ -50,12 +50,23 @@ export function createSupervisorAgent() {
     const messages = state.messages;
 
     // 检测 Continue 请求（前端工具执行后的恢复）
-    if (state.tempData?.operationParams && state.tempData?.nearbyObjects !== undefined) {
-      console.log('🔄 检测到 Continue 请求，直接路由到 create_agent');
+    if (state.tempData?.operationParams) {
+      const intent = state.intent;
+      console.log(`🔄 检测到 Continue 请求，直接路由到 ${intent}_agent`);
+      
+      const agentMap: Record<string, NextAgent> = {
+        create: 'create_agent',
+        delete: 'delete_agent',
+        modify: 'modify_agent',
+        query: 'query_agent',
+      };
+      
+      const nextAgent = agentMap[intent as string] || '__end__';
+      
       return new Command({
-        goto: 'create_agent',
+        goto: nextAgent,
         update: {
-          intent: 'create',
+          intent: state.intent,
           tempData: state.tempData,
           messages: state.messages,
         },
