@@ -45,14 +45,13 @@ export function createSupervisorAgent() {
   return async function supervisorAgent(
     state: AgentState
   ): Promise<Command<NextAgent>> {
-    console.log('\n🎯 Supervisor Agent: 分析用户意图...');
+    console.log(`\n🎯 SUPERVISOR: intent=${state.intent}, operationParams=${!!state.tempData?.operationParams}`);
 
     const messages = state.messages;
 
-    // 检测 Continue 请求（前端工具执行后的恢复）
     if (state.tempData?.operationParams) {
       const intent = state.intent;
-      console.log(`🔄 检测到 Continue 请求，直接路由到 ${intent}_agent`);
+      console.log(`🔄 CONTINUE -> ${intent}_agent`);
       
       const agentMap: Record<string, NextAgent> = {
         create: 'create_agent',
@@ -108,12 +107,8 @@ export function createSupervisorAgent() {
       intent = undefined;
     }
 
-    console.log(`➡️  下一个 Agent: ${nextAgent}`);
-    if (intent) {
-      console.log(`🎯 用户意图: ${intent}`);
-    }
+    console.log(`➡️  ROUTE -> ${nextAgent}`);
 
-    // 如果是无关请求（__end__ 且没有已完成的任务），添加友好提示
     const shouldShowHelp = nextAgent === '__end__' && !state.intent;
     const helpMessage = shouldShowHelp
       ? `抱歉，我只能帮你编辑 3D 场景。我可以做的事情包括：

@@ -69,44 +69,35 @@ export function createCreateAgent() {
   return async function createAgent(
     state: AgentState
   ): Promise<Command<'supervisor'>> {
-    console.log('\n🎨 CreateAgent: 处理创建对象请求...');
-    
-    // 如果 intent 不是 create，直接返回
     if (state.intent !== 'create') {
-      console.log(`⚠️ CreateAgent: intent 是 ${state.intent}，不处理`);
       return new Command({
         goto: 'supervisor',
         update: { messages: state.messages },
       });
     }
 
-    // 找到最后一条真正的用户消息（跳过系统消息和 Supervisor 的路由消息）
     let userRequest = '';
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const msg = state.messages[i];
-      const role = msg.role || (msg as any)._getType?.();
+      const msgType = (msg as any).type || (msg as any)._getType?.();
       const content = String(msg.content);
 
-      // 跳过系统消息和 Supervisor 的路由消息
-      if (role === 'system' || content.includes('Supervisor: 路由到')) {
+      if (msgType === 'system' || content.includes('Supervisor: 路由到')) {
         continue;
       }
 
-      // 找到用户消息
-      if (role === 'user' || role === 'human') {
+      if (msgType === 'user' || msgType === 'human') {
         userRequest = content;
         break;
       }
     }
 
-    console.log(`👤 用户请求: "${userRequest.substring(0, 50)}..."`);
-
-    // 如果没有找到用户请求，返回错误
     if (!userRequest) {
-      console.error('❌ 未找到用户消息');
       return new Command({
-        goto: 'supervisor',
+        goto: '__end__',
         update: {
+          intent: undefined,
+          tempData: {},
           messages: [
             ...state.messages,
             {
@@ -118,9 +109,7 @@ export function createCreateAgent() {
       });
     }
 
-    // 第一次进入：解析用户请求
     if (!state.tempData?.operationParams || state.tempData.operationParams.resumed) {
-      console.log('📝 解析用户请求...');
 
       const llmMessages = [
         new SystemMessage(systemPrompt),
@@ -143,10 +132,11 @@ export function createCreateAgent() {
           throw new Error('无法解析 LLM 返回的 JSON');
         }
       } catch (error) {
-        console.error('❌ 解析 LLM 返回失败:', responseContent);
         return new Command({
-          goto: 'supervisor',
+          goto: '__end__',
           update: {
+            intent: undefined,
+            tempData: {},
             messages: [
               ...state.messages,
               {
@@ -160,7 +150,6 @@ export function createCreateAgent() {
 
       console.log('✅ 解析结果:', parsedData.type, parsedData.params);
 
-      // 规范化类型（处理可能的中文或其他变体）
       const typeMap: Record<string, string> = {
         '正方形': 'square',
         '方形': 'square',
@@ -174,10 +163,11 @@ export function createCreateAgent() {
 
       const normalizedType = typeMap[parsedData.type?.toLowerCase()] || parsedData.type;
       if (!['square', 'circle', 'triangle'].includes(normalizedType)) {
-        console.error(`❌ 不支持的类型: ${parsedData.type}`);
         return new Command({
-          goto: 'supervisor',
+          goto: '__end__',
           update: {
+            intent: undefined,
+            tempData: {},
             messages: [
               ...state.messages,
               {
@@ -191,11 +181,7 @@ export function createCreateAgent() {
 
       parsedData.type = normalizedType;
 
-      // 检查是否需要前端工具
       if (parsedData.needsNearbyObjects) {
-        console.log('⏸️ 需要前端工具获取附近对象，标记需要 interrupt...');
-
-        // 直接结束 workflow，让 API handler 返回 interrupted 状态
         return new Command({
           goto: '__end__',  // 直接结束，不回到 supervisor
           update: {
@@ -225,12 +211,8 @@ export function createCreateAgent() {
         });
       }
 
-      // 不需要前端工具，继续创建
       return await executeCreate(state, parsedData);
     }
-
-    // 第二次进入：收到前端工具结果，继续执行
-    console.log('▶️ 收到前端工具结果，继续执行');
 
     const nearbyObjects = state.tempData.nearbyObjects || [];
     const operationParams = state.tempData.operationParams!;
@@ -238,14 +220,12 @@ export function createCreateAgent() {
     // 找到一个合适的位置（避开已有对象）
     let position = operationParams.position;
     if (nearbyObjects.length > 0) {
-      // 简单策略：在附近找一个空位
       const offset = 8;
       position = {
         x: nearbyObjects[0].position[0] + offset,
         y: 0,
         z: nearbyObjects[0].position[2],
       };
-      console.log(`📍 找到合适位置: (${position.x}, ${position.y}, ${position.z})`);
     }
 
     operationParams.position = position;
@@ -261,8 +241,6 @@ async function executeCreate(
   state: AgentState,
   params: any
 ): Promise<Command<'supervisor'>> {
-  console.log('🔨 执行创建操作...');
-
   const id = generateId();
   const { type, position } = params;
 
@@ -315,30 +293,22 @@ async function executeCreate(
       after_state: { id, type, vertexList, position },
     });
 
-    console.log(`✅ 创建成功: ${type} (ID: ${id})`);
+    console.log(`✅ CREATE: ${type} (${id})`);
 
-    // 返回成功，回到 supervisor
     return new Command({
-      goto: 'supervisor',
+      goto: '__end__',
       update: {
-        intent: 'create', // 保留 intent
+        intent: 'create',
         tempData: {
-          targetObjectId: id,
           createdObject: {
             id,
             type,
-            vertexList,  // 添加 vertexList
+            vertexList,
             position: [position.x, position.y || 0, position.z],
             position_x: position.x,
             position_y: position.y || 0,
             position_z: position.z,
           },
-          // 清除所有中间状态，避免重复执行
-          needsFrontendTool: false,
-          frontendToolAction: undefined,
-          frontendToolParams: undefined,
-          operationParams: undefined,
-          nearbyObjects: undefined,
         },
         messages: [
           ...state.messages,
@@ -350,10 +320,11 @@ async function executeCreate(
       },
     });
   } catch (error) {
-    console.error('❌ 创建失败:', error);
     return new Command({
-      goto: 'supervisor',
+      goto: '__end__',
       update: {
+        intent: undefined,
+        tempData: {},
         messages: [
           ...state.messages,
           {

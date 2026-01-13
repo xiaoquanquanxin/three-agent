@@ -50,6 +50,15 @@ builder.addNode('query_agent', createQueryAgent(), {
 
 builder.addEdge(START, 'supervisor');
 
+// ✅ 条件边 + 防循环
+builder.addConditionalEdges('supervisor', (state: AgentState) => {
+  // 防重复 supervisor 调用
+  if (state.intent && state.next_agent === 'supervisor') {
+    return '__end__';
+  }
+  return state.next_agent || '__end__';
+});
+
 const checkpointer = new MemorySaver();
 export const graph = builder.compile({checkpointer});
 

@@ -54,32 +54,28 @@ export function createDeleteAgent() {
   return async function deleteAgent(
     state: AgentState
   ): Promise<Command<'supervisor'>> {
-    console.log('\n🗑️  DeleteAgent: 处理删除对象请求...');
-    console.log('🔍 state.tempData?.operationParams:', state.tempData?.operationParams);
-    console.log('🔍 是否有 operationParams:', !!state.tempData?.operationParams);
-
     let userRequest = '';
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const msg = state.messages[i];
-      const role = msg.role || (msg as any)._getType?.();
+      const msgType = (msg as any).type || (msg as any)._getType?.();
       const content = String(msg.content);
 
-      if (role === 'system' || content.includes('Supervisor: 路由到')) {
+      if (msgType === 'system' || content.includes('Supervisor: 路由到')) {
         continue;
       }
 
-      if (role === 'user' || role === 'human') {
+      if (msgType === 'user' || msgType === 'human') {
         userRequest = content;
         break;
       }
     }
 
-    console.log(`👤 用户请求: "${userRequest.substring(0, 50)}..."`);
-
     if (!userRequest) {
       return new Command({
-        goto: 'supervisor',
+        goto: '__end__',
         update: {
+          intent: undefined,
+          tempData: {},
           messages: [
             ...state.messages,
             { role: 'assistant', content: '抱歉，我无法找到你的请求内容。' } as any,
@@ -89,8 +85,6 @@ export function createDeleteAgent() {
     }
 
     if (!state.tempData?.operationParams) {
-      console.log('📝 解析用户请求...');
-
       const llmMessages = [
         new SystemMessage(systemPrompt),
         new HumanMessage(`用户说："${userRequest}"
@@ -110,10 +104,11 @@ export function createDeleteAgent() {
           throw new Error('无法解析 LLM 返回的 JSON');
         }
       } catch (error) {
-        console.error('❌ 解析 LLM 返回失败:', responseContent);
         return new Command({
-          goto: 'supervisor',
+          goto: '__end__',
           update: {
+            intent: undefined,
+            tempData: {},
             messages: [
               ...state.messages,
               { role: 'assistant', content: '抱歉，我无法理解你的请求。' } as any,
@@ -126,8 +121,6 @@ export function createDeleteAgent() {
 
       if (parsedData.needsQuery) {
         if (parsedData.queryType === 'byType') {
-          console.log('⏸️ 需要前端工具按类型查询对象...');
-
           return new Command({
             goto: '__end__',
             update: {
@@ -146,8 +139,6 @@ export function createDeleteAgent() {
             },
           });
         } else if (parsedData.queryType === 'byLocation') {
-          console.log('⏸️ 需要前端工具按位置查询对象...');
-
           return new Command({
             goto: '__end__',
             update: {
@@ -171,22 +162,16 @@ export function createDeleteAgent() {
       return await executeDelete(state, parsedData.targetId);
     }
 
-    console.log('▶️ 收到前端工具结果，继续执行');
-    console.log('📦 完整 state:', JSON.stringify(state, null, 2));
-
     const nearbyObjects = state.tempData.nearbyObjects || [];
-    const objectsByType = state.tempData.objectsByType || state.tempData.nearbyObjects || [];
+    const objectsByType = (state.tempData as any).objectsByType || state.tempData.nearbyObjects || [];
     const results = objectsByType;
 
-    console.log('🔍 nearbyObjects:', nearbyObjects);
-    console.log('🔍 objectsByType:', objectsByType);
-    console.log('🔍 results:', results);
-
     if (results.length === 0) {
-      console.log('❌ 没有找到任何对象');
       return new Command({
-        goto: 'supervisor',
+        goto: '__end__',
         update: {
+          intent: undefined,
+          tempData: {},
           messages: [
             ...state.messages,
             { role: 'assistant', content: '没有找到对象。' } as any,
@@ -196,8 +181,6 @@ export function createDeleteAgent() {
     }
 
     const targetId = results[0].id;
-    console.log(`🎯 找到目标对象: ${targetId}`);
-    console.log(`🔍 准备删除，targetId 类型: ${typeof targetId}`);
 
     return await executeDelete(state, targetId);
   };
@@ -207,14 +190,12 @@ async function executeDelete(
   state: AgentState,
   targetId: string
 ): Promise<Command<'supervisor'>> {
-  console.log(`🔨 执行删除操作: ${targetId}`);
-  console.log(`🔍 targetId 类型: ${typeof targetId}, 值: "${targetId}"`);
-
   if (!targetId) {
-    console.log('❌ targetId 为空');
     return new Command({
-      goto: 'supervisor',
+      goto: '__end__',
       update: {
+        intent: undefined,
+        tempData: {},
         messages: [
           ...state.messages,
           { role: 'assistant', content: '请指定要删除的对象。' } as any,
@@ -224,15 +205,14 @@ async function executeDelete(
   }
 
   try {
-    console.log(`🔍 查询数据库中的对象: ${targetId}`);
     const shape = getShapeById(targetId);
-    console.log(`🔍 查询结果:`, shape);
 
     if (!shape) {
-      console.log(`❌ 数据库中未找到对象: ${targetId}`);
       return new Command({
-        goto: 'supervisor',
+        goto: '__end__',
         update: {
+          intent: undefined,
+          tempData: {},
           messages: [
             ...state.messages,
             { role: 'assistant', content: `未找到对象: ${targetId}` } as any,
@@ -241,9 +221,7 @@ async function executeDelete(
       });
     }
 
-    console.log(`🗑️ 开始删除对象: ${targetId}`);
     deleteShape(targetId);
-    console.log(`✅ 数据库删除完成`);
 
     recordOperation({
       session_id: state.sessionId || 'default',
@@ -253,19 +231,14 @@ async function executeDelete(
       after_state: null,
     });
 
-    console.log(`✅ 删除成功: ${targetId}`);
+    console.log(`✅ DELETE: ${targetId}`);
 
     return new Command({
-      goto: 'supervisor',
+      goto: '__end__',
       update: {
         intent: 'delete',
         tempData: {
           targetObjectId: targetId,
-          needsFrontendTool: false,
-          frontendToolAction: undefined,
-          frontendToolParams: undefined,
-          operationParams: undefined,
-          nearbyObjects: undefined,
         },
         messages: [
           ...state.messages,
@@ -274,10 +247,11 @@ async function executeDelete(
       },
     });
   } catch (error) {
-    console.error('❌ 删除失败:', error);
     return new Command({
-      goto: 'supervisor',
+      goto: '__end__',
       update: {
+        intent: undefined,
+        tempData: {},
         messages: [
           ...state.messages,
           { role: 'assistant', content: `删除失败: ${error}` } as any,
