@@ -138,7 +138,6 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
     let toolResult: any = null
 
     // 根据 action 调用相应的前端工具
-    debugger
     if (action === 'getNearbyObjects' && sceneRef.current) {
       const { x, y, z, radius } = params
       toolResult = sceneRef.current.getNearbyObjects(x, y, z, radius)
