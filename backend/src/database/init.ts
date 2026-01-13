@@ -5,7 +5,7 @@ import path from 'path';
 const DB_PATH = path.join(__dirname, '../../database.db');
 
 // 创建或连接数据库
-export const db = new Database(DB_PATH);
+export const db: Database.Database = new Database(DB_PATH);
 
 // 初始化数据库表
 export function initDatabase() {
