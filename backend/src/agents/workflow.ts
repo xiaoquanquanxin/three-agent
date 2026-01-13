@@ -42,7 +42,7 @@ builder.addNode('delete_agent', createDeleteAgent(), {
   ends: ['supervisor', '__end__'],
 });
 builder.addNode('modify_agent', createModifyAgent(), {
-  ends: ['supervisor'],
+  ends: ['__end__'],
 });
 builder.addNode('query_agent', createQueryAgent(), {
   ends: ['__end__'],

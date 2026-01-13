@@ -131,7 +131,7 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 
   // 处理 interrupt，执行前端工具
   async function handleInterrupt(interruptData: any) {
-    const { action, params, threadId: interruptThreadId } = interruptData
+    const { action, params, threadId: interruptThreadId, operationParams, intent } = interruptData
 
     console.log('🔧 执行前端工具:', action, params)
 
@@ -144,15 +144,14 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
     } else if (action === 'getObjectsByType' && sceneRef.current) {
       const { type } = params
       toolResult = sceneRef.current.getObjectsByType(type)
+    } else if (action === 'getLastCreated' && sceneRef.current) {
+      const { type, offset } = params
+      toolResult = sceneRef.current.getLastCreated(type, offset || 0)
     }
-    // TODO: 添加其他前端工具
-    // else if (action === 'getLastCreated' && sceneRef.current) {
-    //   toolResult = sceneRef.current.getLastCreated(params.type)
-    // }
 
     console.log('📤 工具执行结果:', toolResult)
 
-    // 发送 continue 请求
+    // 发送 continue 请求，传回 operationParams 和 intent
     try {
       const response = await fetch('/api/chat-sdk/continue', {
         method: 'POST',
@@ -161,6 +160,8 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
           threadId: interruptThreadId || threadId,
           sessionId,
           toolResult,
+          operationParams,  // 传回后端保存的 operationParams
+          intent,           // 传回后端保存的 intent
         }),
       })
 

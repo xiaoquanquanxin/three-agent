@@ -146,6 +146,8 @@ export async function handleChatSDK(req: Request, res: Response) {
         status: 'interrupted',
         action: stateTempData.frontendToolAction || 'unknown',
         params: stateTempData.frontendToolParams || {},
+        operationParams: stateTempData.operationParams || null,  // 返回给前端，resume 时需要传回
+        intent,  // 返回 intent，resume 时需要传回
         threadId: actualThreadId,
         sessionId: actualSessionId,
       });
@@ -204,24 +206,36 @@ export async function handleChatSDK(req: Request, res: Response) {
  */
 export async function handleChatSDKContinue(req: Request, res: Response) {
   try {
-    const { threadId, sessionId, toolResult } = req.body;
+    const { threadId, sessionId, toolResult, operationParams, intent } = req.body;
+
+    console.log('📥 Continue 请求:');
+    console.log('  - threadId:', threadId);
+    console.log('  - toolResult:', JSON.stringify(toolResult));
+    console.log('  - operationParams:', JSON.stringify(operationParams));
+    console.log('  - intent:', intent);
 
     if (!threadId || !toolResult) {
       return res.status(400).json({ error: '缺少 threadId 或 toolResult 参数' });
     }
 
-    // Resume workflow - 将 toolResult 合并到 tempData
+    // Resume workflow - 将 toolResult 和 operationParams 合并到 tempData
+    const inputData = {
+      intent,  // 恢复 intent
+      tempData: {
+        nearbyObjects: toolResult,
+        objectsByType: toolResult,
+        lastCreated: toolResult,
+        operationParams,  // 恢复原来的 operationParams
+        resumed: true,
+      },
+    };
+    console.log('📤 发送到 LangGraph 的 input:', JSON.stringify(inputData, null, 2));
+
     const streamResponse = client.runs.stream(
       threadId,
       ASSISTANT_ID,
       {
-        input: {
-          tempData: {
-            nearbyObjects: toolResult,
-            objectsByType: toolResult,
-            operationParams: { resumed: true },  // 标记已恢复，避免重复 interrupt
-          },
-        },
+        input: inputData,
         streamMode: ['values', 'updates'],
         multitaskStrategy: 'reject',
       }
@@ -236,9 +250,14 @@ export async function handleChatSDKContinue(req: Request, res: Response) {
     }
 
     // 返回结果
-    const intent = lastValue?.intent;
+    const resultIntent = lastValue?.intent;
     const tempData = lastValue?.tempData;
     const messages = lastValue?.messages || [];
+
+    console.log('📊 LangGraph 返回结果:');
+    console.log('  - resultIntent:', resultIntent);
+    console.log('  - tempData:', JSON.stringify(tempData));
+    console.log('  - modifiedObject:', JSON.stringify(tempData?.modifiedObject));
 
     // 提取最后一条 assistant 消息
     let assistantMessage = '';
@@ -253,9 +272,9 @@ export async function handleChatSDKContinue(req: Request, res: Response) {
 
     // 如果没有找到 assistant 消息，使用 action 生成默认消息
     if (!assistantMessage) {
-      if (intent === 'delete' && tempData?.targetObjectId) {
+      if (resultIntent === 'delete' && tempData?.targetObjectId) {
         assistantMessage = `已删除对象`;
-      } else if (intent === 'modify' && tempData?.modifiedObject) {
+      } else if (resultIntent === 'modify' && tempData?.modifiedObject) {
         assistantMessage = `已修改对象`;
       } else {
         assistantMessage = '执行完成';
@@ -270,7 +289,7 @@ export async function handleChatSDKContinue(req: Request, res: Response) {
     };
 
     // 使用动态映射处理 action
-    const handler = ACTION_MAP[intent as keyof typeof ACTION_MAP] || ACTION_MAP.default;
+    const handler = ACTION_MAP[resultIntent as keyof typeof ACTION_MAP] || ACTION_MAP.default;
     Object.assign(response, handler(tempData));
 
     res.json(response);

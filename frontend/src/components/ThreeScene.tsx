@@ -9,6 +9,7 @@ interface ThreeSceneProps {
 export interface ThreeSceneRef {
   getNearbyObjects: (x: number, y: number, z: number, radius?: number) => any[]
   getObjectsByType: (type: string) => any[]
+  getLastCreated: (type: string, offset?: number) => any
 }
 
 const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) => {
@@ -69,6 +70,35 @@ const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) 
       console.log(`✅ 找到 ${results.length} 个 ${type} 对象:`, results)
 
       return results
+    },
+    getLastCreated: (type: string, offset: number = 0) => {
+      console.log(`🔍 getLastCreated: 查找最后创建的 ${type}，offset=${offset}`)
+
+      // 按类型筛选
+      const filtered = shapes.filter(s => s.type === type)
+      
+      // 按 created_at 排序（最新的在前）
+      filtered.sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime()
+        const timeB = new Date(b.created_at).getTime()
+        return timeB - timeA
+      })
+
+      // 获取指定 offset 的对象
+      const target = filtered[offset]
+
+      if (!target) {
+        console.log(`❌ 没有找到第 ${offset + 1} 个 ${type}`)
+        return null
+      }
+
+      console.log(`✅ 找到对象:`, target.id)
+
+      return {
+        id: target.id,
+        type: target.type,
+        position: [target.position_x, target.position_y, target.position_z],
+      }
     },
   }))
 
@@ -177,7 +207,10 @@ const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) 
 
     // 添加或更新形状
     shapes.forEach((shape) => {
-      if (!shapesMap.has(shape.id)) {
+      const existingMesh = shapesMap.get(shape.id)
+      
+      if (!existingMesh) {
+        // 创建新形状
         console.log('➕ 创建新形状:', shape.type, shape.id)
         const mesh = createShapeMesh(shape)
         if (mesh) {
@@ -186,6 +219,22 @@ const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) 
           shapesMap.set(shape.id, mesh)
         } else {
           console.error('❌ Mesh 创建失败')
+        }
+      } else {
+        // 更新已存在的形状
+        console.log('🔄 更新形状:', shape.type, shape.id)
+        scene.remove(existingMesh)
+        existingMesh.geometry.dispose()
+        if (Array.isArray(existingMesh.material)) {
+          existingMesh.material.forEach((m) => m.dispose())
+        } else {
+          existingMesh.material.dispose()
+        }
+        
+        const newMesh = createShapeMesh(shape)
+        if (newMesh) {
+          scene.add(newMesh)
+          shapesMap.set(shape.id, newMesh)
         }
       }
     })

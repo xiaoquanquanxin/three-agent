@@ -109,7 +109,7 @@ export function createCreateAgent() {
       });
     }
 
-    if (!state.tempData?.operationParams || state.tempData.operationParams.resumed) {
+    if (!state.tempData?.operationParams || state.tempData.resumed) {
 
       const llmMessages = [
         new SystemMessage(systemPrompt),
