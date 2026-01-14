@@ -12,6 +12,34 @@ export interface ThreeSceneRef {
   getLastCreated: (type: string, offset?: number) => any
 }
 
+/**
+ * 从 vertexList 计算形状中心点
+ */
+function getShapeCenter(shape: any): [number, number, number] {
+  const { type, vertexList } = shape
+
+  if (type === 'circle' && vertexList?.center) {
+    return vertexList.center as [number, number, number]
+  }
+
+  if (Array.isArray(vertexList) && vertexList.length > 0) {
+    // 计算所有顶点的平均值
+    let sumX = 0, sumY = 0, sumZ = 0
+    for (const v of vertexList) {
+      sumX += v[0]
+      sumY += v[1]
+      sumZ += v[2]
+    }
+    return [
+      sumX / vertexList.length,
+      sumY / vertexList.length,
+      sumZ / vertexList.length,
+    ]
+  }
+
+  return [0, 0, 0]
+}
+
 const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) => {
   const mountRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
@@ -28,18 +56,19 @@ const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) 
       const targetPos = new THREE.Vector3(x, y, z)
       const results: any[] = []
 
-      shapesMapRef.current.forEach((mesh) => {
-        const distance = mesh.position.distanceTo(targetPos)
+      // 遍历 shapes 数据，从 vertexList 计算中心点
+      shapes.forEach((shape) => {
+        const center = getShapeCenter(shape)
+        const shapePos = new THREE.Vector3(center[0], center[1], center[2])
+        const distance = shapePos.distanceTo(targetPos)
+        
         if (distance <= radius) {
-          const shapeData = shapes.find(s => s.id === mesh.userData.id)
-          if (shapeData) {
-            results.push({
-              id: mesh.userData.id,
-              type: mesh.userData.type,
-              position: [mesh.position.x, mesh.position.y, mesh.position.z],
-              distance: distance,
-            })
-          }
+          results.push({
+            id: shape.id,
+            type: shape.type,
+            position: center,
+            distance: distance,
+          })
         }
       })
 
@@ -54,16 +83,14 @@ const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) 
 
       const results: any[] = []
 
-      shapesMapRef.current.forEach((mesh) => {
-        if (mesh.userData.type === type) {
-          const shapeData = shapes.find(s => s.id === mesh.userData.id)
-          if (shapeData) {
-            results.push({
-              id: mesh.userData.id,
-              type: mesh.userData.type,
-              position: [mesh.position.x, mesh.position.y, mesh.position.z],
-            })
-          }
+      shapes.forEach((shape) => {
+        if (shape.type === type) {
+          const center = getShapeCenter(shape)
+          results.push({
+            id: shape.id,
+            type: shape.type,
+            position: center,
+          })
         }
       })
 
@@ -94,10 +121,13 @@ const ThreeScene = forwardRef<ThreeSceneRef, ThreeSceneProps>(({ shapes }, ref) 
 
       console.log(`✅ 找到对象:`, target.id)
 
+      // 从 vertexList 计算中心点
+      const center = getShapeCenter(target)
+
       return {
         id: target.id,
         type: target.type,
-        position: [target.position_x, target.position_y, target.position_z],
+        position: center,
       }
     },
   }))
@@ -247,54 +277,76 @@ ThreeScene.displayName = 'ThreeScene'
 
 /**
  * 根据形状数据创建 Three.js Mesh
+ * 所有几何信息都从 vertexList 读取
+ * 支持真正的 3D 顶点坐标
  */
 function createShapeMesh(shape: any): THREE.Mesh | null {
   console.log('🔨 createShapeMesh:', {
     type: shape.type,
     hasVertexList: !!shape.vertexList,
-    position_x: shape.position_x,
-    position_z: shape.position_z,
+    color: shape.color,
   })
 
-  const { type, vertexList, position_x, position_z } = shape
+  const { type, vertexList, color } = shape
 
   let geometry: THREE.BufferGeometry | null = null
+  
+  // 解析颜色（支持十六进制字符串）
+  const meshColor = color ? new THREE.Color(color) : new THREE.Color(0x00ff88)
   const material = new THREE.MeshStandardMaterial({
-    color: 0x00ff88,
+    color: meshColor,
     side: THREE.DoubleSide,
   })
 
+  // 计算中心点
+  const center = getShapeCenter(shape)
+
   if (type === 'square' && Array.isArray(vertexList)) {
-    // 正方形：使用 ShapeGeometry
-    const shapeGeom = new THREE.Shape()
-    const firstVertex = vertexList[0]
-    shapeGeom.moveTo(firstVertex[0], firstVertex[2])
-    for (let i = 1; i < vertexList.length; i++) {
-      shapeGeom.lineTo(vertexList[i][0], vertexList[i][2])
-    }
-    shapeGeom.lineTo(firstVertex[0], firstVertex[2])
-    geometry = new THREE.ShapeGeometry(shapeGeom)
-  } else if (type === 'circle' && vertexList.center) {
-    // 圆形：使用 CircleGeometry
+    // 正方形：使用 BufferGeometry（支持 3D 顶点）
+    geometry = new THREE.BufferGeometry()
+    // 4个顶点，分成2个三角形
+    const vertices = new Float32Array([
+      // 第一个三角形
+      vertexList[0][0], vertexList[0][1], vertexList[0][2],
+      vertexList[1][0], vertexList[1][1], vertexList[1][2],
+      vertexList[2][0], vertexList[2][1], vertexList[2][2],
+      // 第二个三角形
+      vertexList[0][0], vertexList[0][1], vertexList[0][2],
+      vertexList[2][0], vertexList[2][1], vertexList[2][2],
+      vertexList[3][0], vertexList[3][1], vertexList[3][2],
+    ])
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+    geometry.computeVertexNormals()
+  } else if (type === 'circle' && vertexList?.center) {
+    // 圆形：使用 CircleGeometry（暂时保持 2D，后续可改成 3D 圆盘）
     const radius = vertexList.radius || 5
     geometry = new THREE.CircleGeometry(radius, 32)
+    // 圆形需要旋转和定位
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.rotation.x = -Math.PI / 2
+    mesh.position.set(center[0], center[1] + 0.1, center[2])
+    mesh.userData.id = shape.id
+    mesh.userData.type = type
+    return mesh
   } else if (type === 'triangle' && Array.isArray(vertexList)) {
-    // 三角形：使用 ShapeGeometry
-    const shapeGeom = new THREE.Shape()
-    shapeGeom.moveTo(vertexList[0][0], vertexList[0][2])
-    shapeGeom.lineTo(vertexList[1][0], vertexList[1][2])
-    shapeGeom.lineTo(vertexList[2][0], vertexList[2][2])
-    shapeGeom.lineTo(vertexList[0][0], vertexList[0][2])
-    geometry = new THREE.ShapeGeometry(shapeGeom)
+    // 三角形：使用 BufferGeometry（支持 3D 顶点）
+    geometry = new THREE.BufferGeometry()
+    const vertices = new Float32Array([
+      vertexList[0][0], vertexList[0][1], vertexList[0][2],
+      vertexList[1][0], vertexList[1][1], vertexList[1][2],
+      vertexList[2][0], vertexList[2][1], vertexList[2][2],
+    ])
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+    geometry.computeVertexNormals()
   }
 
   if (!geometry) return null
 
   const mesh = new THREE.Mesh(geometry, material)
 
-  // 旋转到 XZ 平面（平放在地面上）
-  mesh.rotation.x = -Math.PI / 2
-  mesh.position.set(position_x, 0.1, position_z)
+  // 不再需要旋转，顶点已经是 3D 坐标
+  // 稍微抬高一点避免和地面重叠
+  mesh.position.set(0, 0.1, 0)
 
   // 存储 ID 到 userData
   mesh.userData.id = shape.id

@@ -6,13 +6,15 @@
 }
 
 .scene-container {
-  flex: 7;
+  flex: 1;
+  min-width: 0;
   background: #1a1a1a;
   position: relative;
 }
 
 .chat-container {
-  flex: 3;
+  width: 500px;
+  flex-shrink: 0;
   background: #2c2c2c;
   display: flex;
   flex-direction: column;

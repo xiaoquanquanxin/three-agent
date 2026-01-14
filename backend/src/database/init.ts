@@ -14,15 +14,13 @@ export function initDatabase() {
   // 开启外键约束
   db.pragma('foreign_keys = ON');
 
-  // 创建 shapes 表
+  // 创建 shapes 表（vertexList 包含所有几何信息，不再需要 position 字段）
   db.exec(`
     CREATE TABLE IF NOT EXISTS shapes (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL CHECK(type IN ('square', 'circle', 'triangle')),
       vertexList TEXT NOT NULL,
-      position_x REAL NOT NULL,
-      position_y REAL NOT NULL,
-      position_z REAL NOT NULL,
+      color TEXT DEFAULT '#00ff88',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );

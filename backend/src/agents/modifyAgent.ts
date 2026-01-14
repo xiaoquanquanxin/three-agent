@@ -29,18 +29,34 @@ export function createModifyAgent() {
 }
 
 字段说明：
-- needsQuery: 是否需要查询对象（"上一个正方形"、"最后创建的圆"、"三角形"等）
-- queryType: 查询类型（"lastCreated" 按创建时间查询）
+- needsQuery: 是否需要查询对象
+- queryType: 查询类型
+  - "lastCreated": 按创建时间查询（"上一个正方形"、"最后创建的圆"）
+  - "nearby": 按位置查询（"坐标附近的"、"(x,y,z)附近的"）
 - targetId: 如果用户直接指定 ID，填写这里
-- modifications: 要修改的属性（sideLength、radius、size、position 等）
+- modifications: 要修改的属性（sideLength、radius、size、color）
 - searchParams: 查询参数
-  - lastCreated: {"type": "square", "offset": 0} （offset: 0=最后一个, 1=倒数第二个）
+  - lastCreated: {"type": "square", "offset": 0}
+  - nearby: {"x": 10, "y": 0, "z": 10, "radius": 5, "type": "triangle"}（type 可选）
 
 重要规则：
-- 当用户只说"三角形"、"圆形"、"正方形"时，needsQuery=true，查询最后一个该类型的对象
-- 三角形的属性是 "size"（无论用户说"大小"、"边长"、"尺寸"都用 size）
-- 圆形的属性是 "radius"（无论用户说"半径"、"大小"都用 radius）
-- 正方形的属性是 "sideLength"（无论用户说"边长"、"大小"都用 sideLength）
+- 当用户说"附近"、"坐标xxx"时，queryType="nearby"
+- 当用户说"上一个"、"最后创建的"时，queryType="lastCreated"
+- 三角形的属性是 "size"
+- 圆形的属性是 "radius"
+- 正方形的属性是 "sideLength"
+- 颜色属性是 "color"（十六进制，如 "#ff0000"）
+
+颜色识别：
+- 红色/红 → "#ff0000"
+- 绿色/绿 → "#00ff00"
+- 蓝色/蓝 → "#0000ff"
+- 黄色/黄 → "#ffff00"
+- 白色/白 → "#ffffff"
+- 黑色/黑 → "#000000"
+- 橙色/橙 → "#ff8800"
+- 紫色/紫 → "#8800ff"
+- 粉色/粉 → "#ff88ff"
 
 示例 1 - 直接指定 ID：
 输入："修改 square_001 的边长为 10"
@@ -50,15 +66,19 @@ export function createModifyAgent() {
 输入："修改上一个正方形的边长为 8"
 输出：{"needsQuery": true, "queryType": "lastCreated", "searchParams": {"type": "square", "offset": 0}, "modifications": {"sideLength": 8}}
 
-示例 3 - 三角形（说"大小"）：
-输入："三角形大小改为 10"
-输出：{"needsQuery": true, "queryType": "lastCreated", "searchParams": {"type": "triangle", "offset": 0}, "modifications": {"size": 10}}
+示例 3 - 修改颜色：
+输入："把三角形改成红色"
+输出：{"needsQuery": true, "queryType": "lastCreated", "searchParams": {"type": "triangle", "offset": 0}, "modifications": {"color": "#ff0000"}}
 
-示例 4 - 三角形（说"边长"）：
-输入："三角形边长改为 10"
-输出：{"needsQuery": true, "queryType": "lastCreated", "searchParams": {"type": "triangle", "offset": 0}, "modifications": {"size": 10}}
+示例 4 - 同时修改大小和颜色：
+输入："把正方形边长改为 10，颜色改成蓝色"
+输出：{"needsQuery": true, "queryType": "lastCreated", "searchParams": {"type": "square", "offset": 0}, "modifications": {"sideLength": 10, "color": "#0000ff"}}
 
-示例 5 - 修改圆形：
+示例 5 - 按位置查询：
+输入："把坐标 (10, 0, 5) 附近的三角形边长改为 10"
+输出：{"needsQuery": true, "queryType": "nearby", "searchParams": {"x": 10, "y": 0, "z": 5, "radius": 5, "type": "triangle"}, "modifications": {"size": 10}}
+
+示例 6 - 修改圆形：
 输入："圆的半径改成 15"
 输出：{"needsQuery": true, "queryType": "lastCreated", "searchParams": {"type": "circle", "offset": 0}, "modifications": {"radius": 15}}`;
 
@@ -96,15 +116,49 @@ export function createModifyAgent() {
     }
 
     // 如果是 resumed 且有 operationParams，直接执行修改（跳过 LLM 解析）
-    if (state.tempData?.resumed && state.tempData?.operationParams) {
-      const lastCreated = state.tempData.lastCreated;
+    if ((state.tempData as any)?.resumed && state.tempData?.operationParams) {
       const operationParams = state.tempData.operationParams;
+      let targetId: string | undefined;
 
-      console.log('🔍 ModifyAgent resumed: lastCreated=', lastCreated);
-      console.log('🔍 ModifyAgent resumed: operationParams=', operationParams);
+      // 根据查询类型获取目标 ID
+      if (operationParams.queryType === 'lastCreated') {
+        const lastCreated = state.tempData.lastCreated;
+        console.log('🔍 ModifyAgent resumed (lastCreated):', lastCreated);
+        if (!lastCreated || !lastCreated.id) {
+          return new Command({
+            goto: '__end__',
+            update: {
+              intent: undefined,
+              tempData: {},
+              messages: [
+                ...state.messages,
+                { role: 'assistant', content: '没有找到对象。' } as any,
+              ],
+            },
+          });
+        }
+        targetId = lastCreated.id;
+      } else if (operationParams.queryType === 'nearby') {
+        const nearbyObjects = state.tempData.nearbyObjects;
+        console.log('🔍 ModifyAgent resumed (nearby):', nearbyObjects);
+        if (!nearbyObjects || nearbyObjects.length === 0) {
+          return new Command({
+            goto: '__end__',
+            update: {
+              intent: undefined,
+              tempData: {},
+              messages: [
+                ...state.messages,
+                { role: 'assistant', content: '附近没有找到对象。' } as any,
+              ],
+            },
+          });
+        }
+        // 取最近的一个对象
+        targetId = nearbyObjects[0].id;
+      }
 
-      if (!lastCreated || !lastCreated.id) {
-        console.log('❌ lastCreated 不存在或没有 id');
+      if (!targetId) {
         return new Command({
           goto: '__end__',
           update: {
@@ -112,15 +166,13 @@ export function createModifyAgent() {
             tempData: {},
             messages: [
               ...state.messages,
-              { role: 'assistant', content: '没有找到对象。' } as any,
+              { role: 'assistant', content: '无法确定要修改的对象。' } as any,
             ],
           },
         });
       }
 
-      const targetId = lastCreated.id;
       const modifications = operationParams?.modifications || {};
-
       console.log('➡️ resumed 执行 executeModify, targetId=', targetId, 'modifications=', modifications);
 
       return await executeModify(state, targetId, modifications);
@@ -176,6 +228,26 @@ export function createModifyAgent() {
             messages: [
               ...state.messages,
               { role: 'system', content: 'ModifyAgent: 需要前端工具 getLastCreated' } as any,
+            ],
+          },
+        });
+      }
+
+      if (parsedData.needsQuery && parsedData.queryType === 'nearby') {
+        return new Command({
+          goto: '__end__',
+          update: {
+            intent: 'modify',
+            tempData: {
+              ...state.tempData,
+              needsFrontendTool: true,
+              frontendToolAction: 'getNearbyObjects',
+              frontendToolParams: parsedData.searchParams,
+              operationParams: parsedData,
+            },
+            messages: [
+              ...state.messages,
+              { role: 'system', content: 'ModifyAgent: 需要前端工具 getNearbyObjects' } as any,
             ],
           },
         });
@@ -272,39 +344,52 @@ async function executeModify(
     const oldVertexList = typeof beforeState.vertexList === 'string' 
       ? JSON.parse(beforeState.vertexList) 
       : beforeState.vertexList;
+    
     let newVertexList = oldVertexList;
-    let updateParams: any = {};
+    let newColor = beforeState.color;
+    let hasGeometryChange = false;
 
+    // 处理几何属性修改（保持原有的 y 坐标）
     if (type === 'square' && modifications.sideLength) {
+      const centerX = (oldVertexList[0][0] + oldVertexList[2][0]) / 2;
+      const centerY = oldVertexList[0][1]; // 保持原有高度
+      const centerZ = (oldVertexList[0][2] + oldVertexList[2][2]) / 2;
       const sideLength = modifications.sideLength;
       const halfSide = sideLength / 2;
-      const x = beforeState.position_x;
-      const z = beforeState.position_z;
       newVertexList = [
-        [x - halfSide, 0, z - halfSide],
-        [x + halfSide, 0, z - halfSide],
-        [x + halfSide, 0, z + halfSide],
-        [x - halfSide, 0, z + halfSide],
+        [centerX - halfSide, centerY, centerZ - halfSide],
+        [centerX + halfSide, centerY, centerZ - halfSide],
+        [centerX + halfSide, centerY, centerZ + halfSide],
+        [centerX - halfSide, centerY, centerZ + halfSide],
       ];
-      updateParams.vertexList = newVertexList;
+      hasGeometryChange = true;
     } else if (type === 'circle' && modifications.radius) {
       const radius = modifications.radius;
       newVertexList = {
         center: oldVertexList.center,
         radius: radius,
       };
-      updateParams.vertexList = newVertexList;
+      hasGeometryChange = true;
     } else if (type === 'triangle' && modifications.size) {
+      const centerX = (oldVertexList[0][0] + oldVertexList[1][0] + oldVertexList[2][0]) / 3;
+      const centerY = (oldVertexList[0][1] + oldVertexList[1][1] + oldVertexList[2][1]) / 3; // 保持原有高度
+      const centerZ = (oldVertexList[0][2] + oldVertexList[1][2] + oldVertexList[2][2]) / 3;
       const size = modifications.size;
-      const x = beforeState.position_x;
-      const z = beforeState.position_z;
       newVertexList = [
-        [x, 0, z - size / 2],
-        [x - size / 2, 0, z + size / 2],
-        [x + size / 2, 0, z + size / 2],
+        [centerX, centerY, centerZ - size / 2],
+        [centerX - size / 2, centerY, centerZ + size / 2],
+        [centerX + size / 2, centerY, centerZ + size / 2],
       ];
-      updateParams.vertexList = newVertexList;
-    } else {
+      hasGeometryChange = true;
+    }
+
+    // 处理颜色修改
+    if (modifications.color) {
+      newColor = modifications.color;
+    }
+
+    // 如果没有任何有效修改
+    if (!hasGeometryChange && !modifications.color) {
       return new Command({
         goto: '__end__',
         update: {
@@ -318,18 +403,13 @@ async function executeModify(
       });
     }
 
-    if (Object.keys(updateParams).length === 0) {
-      return new Command({
-        goto: '__end__',
-        update: {
-          intent: undefined,
-          tempData: {},
-          messages: [
-            ...state.messages,
-            { role: 'assistant', content: '没有需要更新的属性。' } as any,
-          ],
-        },
-      });
+    // 构建更新参数
+    const updateParams: any = {};
+    if (hasGeometryChange) {
+      updateParams.vertexList = newVertexList;
+    }
+    if (modifications.color) {
+      updateParams.color = newColor;
     }
 
     updateShape(targetId, updateParams);
@@ -355,10 +435,7 @@ async function executeModify(
             id: afterState.id,
             type: afterState.type,
             vertexList: afterState.vertexList,
-            position: [afterState.position_x, afterState.position_y, afterState.position_z],
-            position_x: afterState.position_x,
-            position_y: afterState.position_y,
-            position_z: afterState.position_z,
+            color: afterState.color,
             created_at: afterState.created_at,
             updated_at: afterState.updated_at,
           },

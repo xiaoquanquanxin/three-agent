@@ -374,6 +374,19 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
           <button onClick={handleRedo} disabled={loading} title="重做 (Redo)">
             ↪️ 重做
           </button>
+          <span className="button-divider">|</span>
+          <button onClick={() => setInput(generateRandomSquare())} title="随机3D正方形（顶点）">
+            🟦 正方形
+          </button>
+          <button onClick={() => setInput(generateRandomCircle())} title="随机3D圆形">
+            🔵 圆形
+          </button>
+          <button onClick={() => setInput(generateRandomTriangle())} title="随机3D三角形（顶点）">
+            🔺 三角形
+          </button>
+          <button onClick={() => setInput(generateRandom3DTriangle())} title="随机三角形（三边长）">
+            📐 边长三角形
+          </button>
         </div>
         <div className="input-row">
           <textarea
@@ -396,6 +409,80 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 // 生成简单的 ID
 function generateId() {
   return Math.random().toString(36).substring(2, 15)
+}
+
+// 随机颜色
+const COLORS = ['红色', '绿色', '蓝色', '黄色', '橙色', '紫色', '粉色', '白色']
+function randomColor() {
+  return COLORS[Math.floor(Math.random() * COLORS.length)]
+}
+
+// 随机整数
+function randomInt(min: number, max: number) {
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
+// 生成随机 3D 正方形指令（4个顶点）
+function generateRandomSquare() {
+  const size = randomInt(5, 15)
+  const x = randomInt(-15, 15)
+  const y = randomInt(0, 15)
+  const z = randomInt(-15, 15)
+  const color = randomColor()
+  // 随机选择平面方向：xz平面(水平)、xy平面(垂直前后)、yz平面(垂直左右)
+  const plane = randomInt(0, 2)
+  let vertices: string
+  if (plane === 0) {
+    // xz 平面（水平）
+    vertices = `(${x},${y},${z}),(${x+size},${y},${z}),(${x+size},${y},${z+size}),(${x},${y},${z+size})`
+  } else if (plane === 1) {
+    // xy 平面（垂直，面向 z）
+    vertices = `(${x},${y},${z}),(${x+size},${y},${z}),(${x+size},${y+size},${z}),(${x},${y+size},${z})`
+  } else {
+    // yz 平面（垂直，面向 x）
+    vertices = `(${x},${y},${z}),(${x},${y+size},${z}),(${x},${y+size},${z+size}),(${x},${y},${z+size})`
+  }
+  return `画一个${color}正方形，顶点是${vertices}`
+}
+
+// 生成随机 3D 圆形指令
+function generateRandomCircle() {
+  const radius = randomInt(3, 12)
+  const x = randomInt(-15, 15)
+  const y = randomInt(0, 15)
+  const z = randomInt(-15, 15)
+  const color = randomColor()
+  return `画一个${color}圆形，半径${radius}，位置在(${x},${y},${z})`
+}
+
+// 生成随机 3D 三角形指令（3个顶点，完全随机）
+function generateRandomTriangle() {
+  const x1 = randomInt(-15, 15)
+  const y1 = randomInt(0, 15)
+  const z1 = randomInt(-15, 15)
+  const x2 = x1 + randomInt(5, 12)
+  const y2 = randomInt(0, 15)
+  const z2 = z1 + randomInt(-5, 5)
+  const x3 = x1 + randomInt(-3, 8)
+  const y3 = randomInt(0, 15)
+  const z3 = z1 + randomInt(5, 12)
+  const color = randomColor()
+  return `画一个${color}三角形，顶点是(${x1},${y1},${z1}),(${x2},${y2},${z2}),(${x3},${y3},${z3})`
+}
+
+// 生成随机 3D 三角形指令（指定三边长）
+function generateRandom3DTriangle() {
+  const a = randomInt(5, 15)
+  const b = randomInt(5, 15)
+  // c 需要满足三角形不等式
+  const minC = Math.abs(a - b) + 1
+  const maxC = a + b - 1
+  const c = randomInt(Math.max(minC, 5), Math.min(maxC, 15))
+  const x = randomInt(-15, 15)
+  const y = randomInt(0, 15)
+  const z = randomInt(-15, 15)
+  const color = randomColor()
+  return `画一个${color}三角形，三边长${a},${b},${c}，位置在(${x},${y},${z})`
 }
 
 export default ChatPanel

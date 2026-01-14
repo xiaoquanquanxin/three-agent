@@ -36,35 +36,68 @@ export function createCreateAgent() {
   "type": "square",
   "params": {"sideLength": 5},
   "position": {"x": 0, "y": 0, "z": 0},
+  "color": "#00ff88",
   "needsNearbyObjects": false
 }
 
 字段说明：
 - type: 必须是 "square" 或 "circle" 或 "triangle"（小写英文）
 - params:
-  - square: {"sideLength": 边长数字}
+  - square 有两种方式：
+    1. 指定顶点: {"vertices": [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3], [x4,y4,z4]]}（4个顶点，支持任意平面）
+    2. 指定边长: {"sideLength": 边长数字}（在 xz 平面上）
   - circle: {"radius": 半径数字}
-  - triangle: {"size": 大小数字}
-- position: {"x": 数字, "y": 0, "z": 数字}（默认原点）
+  - triangle 有三种方式：
+    1. 指定顶点: {"vertices": [[x1,y1,z1], [x2,y2,z2], [x3,y3,z3]]}（支持 3D 坐标）
+    2. 指定三边长: {"sides": [a, b, c]}（会自动计算顶点）
+    3. 等边三角形: {"size": 边长数字}
+- position: {"x": 数字, "y": 数字, "z": 数字}（默认原点，仅当没有指定 vertices 时使用）
+- color: 颜色（十六进制，默认 "#00ff88"）
 - needsNearbyObjects: 用户是否说"附近"、"旁边"（true/false）
 
-示例 1 - 正方形：
+坐标系说明：
+- x: 左右方向
+- y: 上下方向（高度）
+- z: 前后方向
+- 默认 y=0 表示在地面上
+
+颜色识别：
+- 红色/红 → "#ff0000"
+- 绿色/绿 → "#00ff00"
+- 蓝色/蓝 → "#0000ff"
+- 黄色/黄 → "#ffff00"
+- 白色/白 → "#ffffff"
+- 黑色/黑 → "#000000"
+- 橙色/橙 → "#ff8800"
+- 紫色/紫 → "#8800ff"
+- 粉色/粉 → "#ff88ff"
+- 默认 → "#00ff88"
+
+示例 1 - 正方形（边长）：
 输入："画一个正方形，边长5"
-输出：{"type": "square", "params": {"sideLength": 5}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": false}
+输出：{"type": "square", "params": {"sideLength": 5}, "position": {"x": 0, "y": 0, "z": 0}, "color": "#00ff88", "needsNearbyObjects": false}
 
-示例 2 - 圆形：
-输入："创建一个圆形，半径10"
-输出：{"type": "circle", "params": {"radius": 10}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": false}
+示例 2 - 正方形（顶点，垂直平面）：
+输入："画一个正方形，顶点是(0,0,0),(10,0,0),(10,10,0),(0,10,0)"
+输出：{"type": "square", "params": {"vertices": [[0,0,0], [10,0,0], [10,10,0], [0,10,0]]}, "color": "#00ff88", "needsNearbyObjects": false}
 
-示例 3 - 圆形（另一种说法）：
-输入："画个圆，半径3"
-输出：{"type": "circle", "params": {"radius": 3}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": false}
+示例 3 - 红色圆形：
+输入："创建一个红色圆形，半径10"
+输出：{"type": "circle", "params": {"radius": 10}, "position": {"x": 0, "y": 0, "z": 0}, "color": "#ff0000", "needsNearbyObjects": false}
 
-示例 4 - 三角形：
-输入："在附近画一个三角形"
-输出：{"type": "triangle", "params": {"size": 5}, "position": {"x": 0, "y": 0, "z": 0}, "needsNearbyObjects": true}
+示例 4 - 等边三角形：
+输入："画一个蓝色三角形，边长8"
+输出：{"type": "triangle", "params": {"size": 8}, "position": {"x": 0, "y": 0, "z": 0}, "color": "#0000ff", "needsNearbyObjects": false}
 
-记住：仔细识别用户说的是哪种形状！type 必须是小写英文（square/circle/triangle）！`;
+示例 5 - 指定 3D 顶点的三角形：
+输入："画一个三角形，顶点是 (0,0,0), (10,5,0), (5,10,8)"
+输出：{"type": "triangle", "params": {"vertices": [[0,0,0], [10,5,0], [5,10,8]]}, "color": "#00ff88", "needsNearbyObjects": false}
+
+示例 6 - 指定三边长的三角形：
+输入："画一个三角形，三边长分别是 3, 4, 5"
+输出：{"type": "triangle", "params": {"sides": [3, 4, 5]}, "position": {"x": 0, "y": 0, "z": 0}, "color": "#00ff88", "needsNearbyObjects": false}
+
+记住：仔细识别用户说的是哪种形状和颜色！type 必须是小写英文（square/circle/triangle）！`;
 
   return async function createAgent(
     state: AgentState
@@ -235,6 +268,23 @@ export function createCreateAgent() {
 }
 
 /**
+ * 创建错误响应
+ */
+function createErrorResponse(state: AgentState, message: string): Command<'supervisor'> {
+  return new Command({
+    goto: '__end__',
+    update: {
+      intent: undefined,
+      tempData: {},
+      messages: [
+        ...state.messages,
+        { role: 'assistant', content: message } as any,
+      ],
+    },
+  });
+}
+
+/**
  * 执行创建操作（计算顶点、插入数据库）
  */
 async function executeCreate(
@@ -246,32 +296,96 @@ async function executeCreate(
 
   let vertexList: any;
 
-  // 根据类型计算顶点
+  // 根据类型计算顶点（所有几何信息都在 vertexList 中）
+  // 支持真正的 3D 坐标，y 是高度方向
   if (type === 'square') {
-    const sideLength = params.params?.sideLength || 5;
-    const halfSide = sideLength / 2;
-    vertexList = [
-      [position.x - halfSide, 0, position.z - halfSide], // 左下
-      [position.x + halfSide, 0, position.z - halfSide], // 右下
-      [position.x + halfSide, 0, position.z + halfSide], // 右上
-      [position.x - halfSide, 0, position.z + halfSide], // 左上
-    ];
+    const squareParams = params.params || {};
+    
+    if (squareParams.vertices) {
+      // 方式1：直接指定 4 个顶点坐标
+      vertexList = squareParams.vertices;
+      
+      // 验证：检查是否有4个顶点
+      if (!Array.isArray(vertexList) || vertexList.length !== 4) {
+        return createErrorResponse(state, '正方形需要4个顶点');
+      }
+    } else {
+      // 方式2：指定边长，在 xz 平面上生成
+      const sideLength = squareParams.sideLength || 5;
+      const halfSide = sideLength / 2;
+      const pos = position || { x: 0, y: 0, z: 0 };
+      const y = pos.y || 0;
+      vertexList = [
+        [pos.x - halfSide, y, pos.z - halfSide], // 左下
+        [pos.x + halfSide, y, pos.z - halfSide], // 右下
+        [pos.x + halfSide, y, pos.z + halfSide], // 右上
+        [pos.x - halfSide, y, pos.z + halfSide], // 左上
+      ];
+    }
   } else if (type === 'circle') {
     const radius = params.params?.radius || 5;
+    const pos = position || { x: 0, y: 0, z: 0 };
     vertexList = {
-      center: [position.x, position.y, position.z],
+      center: [pos.x, pos.y || 0, pos.z],
       radius: radius,
     };
   } else if (type === 'triangle') {
-    const size = params.params?.size || 5;
-    vertexList = [
-      [position.x, 0, position.z - size / 2],        // 顶点
-      [position.x - size / 2, 0, position.z + size / 2], // 左下
-      [position.x + size / 2, 0, position.z + size / 2], // 右下
-    ];
+    // 三角形支持三种输入方式
+    const triangleParams = params.params || {};
+    
+    if (triangleParams.vertices) {
+      // 方式1：直接指定 3D 顶点坐标
+      vertexList = triangleParams.vertices;
+      
+      // 验证：检查是否有3个顶点
+      if (!Array.isArray(vertexList) || vertexList.length !== 3) {
+        return createErrorResponse(state, '三角形需要3个顶点');
+      }
+    } else if (triangleParams.sides) {
+      // 方式2：指定三边长，计算顶点（在 xz 平面上，y 使用 position.y）
+      const sides = triangleParams.sides;
+      
+      // 验证：检查是否有3条边
+      if (!Array.isArray(sides) || sides.length !== 3) {
+        return createErrorResponse(state, '需要指定3条边的长度');
+      }
+      
+      const [a, b, c] = sides;
+      
+      // 验证：三角形不等式（任意两边之和大于第三边）
+      if (a + b <= c || a + c <= b || b + c <= a) {
+        return createErrorResponse(state, `无法构成三角形：边长 ${a}, ${b}, ${c} 不满足三角形不等式`);
+      }
+      
+      // 计算顶点（第一个顶点在原点，第二个在x轴上，第三个用余弦定理计算）
+      const pos = position || { x: 0, y: 0, z: 0 };
+      const y = pos.y || 0;
+      // 使用余弦定理计算第三个顶点
+      // cos(A) = (b² + c² - a²) / (2bc)，其中 A 是 a 对面的角
+      const cosA = (b * b + c * c - a * a) / (2 * b * c);
+      const sinA = Math.sqrt(1 - cosA * cosA);
+      
+      vertexList = [
+        [pos.x, y, pos.z],                    // 第一个顶点
+        [pos.x + c, y, pos.z],                // 第二个顶点（沿x轴）
+        [pos.x + b * cosA, y, pos.z + b * sinA], // 第三个顶点
+      ];
+    } else {
+      // 方式3：等边三角形（默认，在 xz 平面上）
+      const size = triangleParams.size || 5;
+      const pos = position || { x: 0, y: 0, z: 0 };
+      const y = pos.y || 0;
+      vertexList = [
+        [pos.x, y, pos.z - size / 2],              // 顶点
+        [pos.x - size / 2, y, pos.z + size / 2],   // 左下
+        [pos.x + size / 2, y, pos.z + size / 2],   // 右下
+      ];
+    }
   } else {
-    throw new Error(`不支持的类型: ${type}`);
+    return createErrorResponse(state, `不支持的类型: ${type}`);
   }
+
+  const color = params.color || '#00ff88';
 
   // 插入数据库
   try {
@@ -279,21 +393,19 @@ async function executeCreate(
       id,
       type,
       vertexList,
-      position_x: position.x,
-      position_y: position.y || 0,
-      position_z: position.z,
+      color,
     });
 
     // 记录操作历史
     recordOperation({
-      session_id: state.sessionId || 'default',  // 提供默认值避免 NOT NULL 错误
+      session_id: state.sessionId || 'default',
       shape_id: id,
       operation: 'create',
       before_state: null,
-      after_state: { id, type, vertexList, position },
+      after_state: { id, type, vertexList, color },
     });
 
-    console.log(`✅ CREATE: ${type} (${id})`);
+    console.log(`✅ CREATE: ${type} (${id}) color=${color}`);
 
     return new Command({
       goto: '__end__',
@@ -304,10 +416,7 @@ async function executeCreate(
             id,
             type,
             vertexList,
-            position: [position.x, position.y || 0, position.z],
-            position_x: position.x,
-            position_y: position.y || 0,
-            position_z: position.z,
+            color,
           },
         },
         messages: [

@@ -14,10 +14,7 @@ const CreatedObjectSchema = z.object({
   id: z.string(),
   type: z.enum(['square', 'circle', 'triangle']),
   vertexList: z.any(),
-  position: z.tuple([z.number(), z.number(), z.number()]).optional(),
-  position_x: z.number().optional(),
-  position_y: z.number().optional(),
-  position_z: z.number().optional(),
+  color: z.string().optional(),
 });
 
 const TempDataSchema = z.object({

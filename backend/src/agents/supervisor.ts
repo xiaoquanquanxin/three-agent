@@ -26,19 +26,26 @@ export function createSupervisorAgent() {
 重要：你必须只返回任务名称，不要有任何其他文字！
 
 可用任务：
-1. create_agent - 创建新对象（正方形、圆形、三角形）
-2. delete_agent - 删除对象
-3. modify_agent - 修改对象
+1. create_agent - 创建/新增/绘制新对象（正方形、圆形、三角形）
+2. delete_agent - 删除/移除对象
+3. modify_agent - 修改/更改已有对象的属性
 4. query_agent - 查询对象信息
 5. __end__ - 非编辑任务或任务完成
 
+关键区分：
+- "新增"、"创建"、"画"、"绘制"、"添加" → create_agent（创建新对象）
+- "修改"、"改成"、"改为"、"调整" → modify_agent（修改已有对象）
+
 示例：
-用户："画一个正方形" → 回复：create_agent
-用户："创建一个圆形，半径10" → 回复：create_agent
-用户："删除附近的圆形" → 回复：delete_agent
-用户："修改上一个正方形的边长" → 回复：modify_agent
-用户："场景中有几个对象？" → 回复：query_agent
-用户："你好" → 回复：__end__
+用户："画一个正方形" → create_agent
+用户："创建一个圆形，半径10" → create_agent
+用户："新增一个三角形，在 0,10,10 位置" → create_agent
+用户："添加一个正方形，边长5" → create_agent
+用户："删除附近的圆形" → delete_agent
+用户："修改上一个正方形的边长" → modify_agent
+用户："把三角形的边长改为10" → modify_agent
+用户："场景中有几个对象？" → query_agent
+用户："你好" → __end__
 
 记住：只返回任务名称，不要有任何解释！`;
 

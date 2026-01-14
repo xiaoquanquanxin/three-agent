@@ -79,7 +79,7 @@ export interface AgentState {
     createdObject?: {
       id: string;
       type: 'square' | 'circle' | 'triangle';
-      position: [number, number, number];
+      vertexList: any;
       [key: string]: any;
     };
 
@@ -89,8 +89,30 @@ export interface AgentState {
     modifiedObject?: {
       id: string;
       type: string;
+      vertexList: any;
       [key: string]: any;
     };
+
+    // --- interrupt 相关 ---
+    /**
+     * 是否需要前端工具
+     */
+    needsFrontendTool?: boolean;
+
+    /**
+     * 前端工具 action
+     */
+    frontendToolAction?: string;
+
+    /**
+     * 前端工具参数
+     */
+    frontendToolParams?: Record<string, any>;
+
+    /**
+     * 是否从 interrupt 恢复
+     */
+    resumed?: boolean;
   };
 
   // ===== 引用栈（优化阶段添加，用于"上一个正方形"） =====

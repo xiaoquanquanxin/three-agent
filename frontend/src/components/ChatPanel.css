@@ -122,6 +122,8 @@
 .action-buttons {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .action-buttons button {
@@ -143,6 +145,11 @@
 .action-buttons button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.button-divider {
+  color: #555;
+  margin: 0 4px;
 }
 
 .input-row {

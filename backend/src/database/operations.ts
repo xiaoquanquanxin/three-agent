@@ -4,27 +4,26 @@ import { db } from './init';
 
 /**
  * 创建形状
+ * vertexList 包含所有几何信息：
+ * - 正方形/三角形: [[x,y,z], [x,y,z], ...]
+ * - 圆形: {center: [x,y,z], radius: number}
  */
 export function createShape(data: {
   id: string;
   type: 'square' | 'circle' | 'triangle';
   vertexList: any;
-  position_x: number;
-  position_y: number;
-  position_z: number;
+  color?: string;
 }) {
   const stmt = db.prepare(`
-    INSERT INTO shapes (id, type, vertexList, position_x, position_y, position_z)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO shapes (id, type, vertexList, color)
+    VALUES (?, ?, ?, ?)
   `);
 
   return stmt.run(
     data.id,
     data.type,
     JSON.stringify(data.vertexList),
-    data.position_x,
-    data.position_y,
-    data.position_z
+    data.color || '#00ff88'
   );
 }
 
@@ -91,9 +90,7 @@ export function getLastCreatedShape(type?: string, offset: number = 0) {
  */
 export function updateShape(id: string, data: {
   vertexList?: any;
-  position_x?: number;
-  position_y?: number;
-  position_z?: number;
+  color?: string;
 }) {
   const updates: string[] = [];
   const values: any[] = [];
@@ -102,17 +99,14 @@ export function updateShape(id: string, data: {
     updates.push('vertexList = ?');
     values.push(JSON.stringify(data.vertexList));
   }
-  if (data.position_x !== undefined) {
-    updates.push('position_x = ?');
-    values.push(data.position_x);
+
+  if (data.color !== undefined) {
+    updates.push('color = ?');
+    values.push(data.color);
   }
-  if (data.position_y !== undefined) {
-    updates.push('position_y = ?');
-    values.push(data.position_y);
-  }
-  if (data.position_z !== undefined) {
-    updates.push('position_z = ?');
-    values.push(data.position_z);
+
+  if (updates.length === 0) {
+    return { changes: 0 };
   }
 
   updates.push('updated_at = CURRENT_TIMESTAMP');
@@ -262,32 +256,18 @@ export function executeUndo(session_id: string): { success: boolean; message: st
   } else if (op.operation === 'delete') {
     // 撤销删除 = 恢复
     const beforeState = op.before_state;
-    // 兼容两种 position 格式
-    const posX = beforeState.position_x ?? beforeState.position?.x ?? 0;
-    const posY = beforeState.position_y ?? beforeState.position?.y ?? 0;
-    const posZ = beforeState.position_z ?? beforeState.position?.z ?? 0;
     createShape({
       id: beforeState.id,
       type: beforeState.type,
       vertexList: beforeState.vertexList,
-      position_x: posX,
-      position_y: posY,
-      position_z: posZ,
     });
     markOperationUndone(op.id);
-    return { success: true, message: '已撤销删除操作', shape: { ...beforeState, position_x: posX, position_y: posY, position_z: posZ, action: 'create' } };
+    return { success: true, message: '已撤销删除操作', shape: { ...beforeState, action: 'create' } };
   } else if (op.operation === 'update') {
     // 撤销修改 = 恢复到 before_state
     const beforeState = op.before_state;
-    // 兼容两种 position 格式
-    const posX = beforeState.position_x ?? beforeState.position?.x ?? undefined;
-    const posY = beforeState.position_y ?? beforeState.position?.y ?? undefined;
-    const posZ = beforeState.position_z ?? beforeState.position?.z ?? undefined;
     updateShape(op.shape_id, {
       vertexList: beforeState.vertexList,
-      position_x: posX,
-      position_y: posY,
-      position_z: posZ,
     });
     markOperationUndone(op.id);
     return { success: true, message: '已撤销修改操作', shape: { ...beforeState, action: 'update' } };
@@ -310,20 +290,13 @@ export function executeRedo(session_id: string): { success: boolean; message: st
   if (op.operation === 'create') {
     // 重做创建 = 创建
     const afterState = op.after_state;
-    // 兼容两种 position 格式
-    const posX = afterState.position_x ?? afterState.position?.x ?? 0;
-    const posY = afterState.position_y ?? afterState.position?.y ?? 0;
-    const posZ = afterState.position_z ?? afterState.position?.z ?? 0;
     createShape({
       id: afterState.id,
       type: afterState.type,
       vertexList: afterState.vertexList,
-      position_x: posX,
-      position_y: posY,
-      position_z: posZ,
     });
     markOperationRedone(op.id);
-    return { success: true, message: '已重做创建操作', shape: { ...afterState, position_x: posX, position_y: posY, position_z: posZ, action: 'create' } };
+    return { success: true, message: '已重做创建操作', shape: { ...afterState, action: 'create' } };
   } else if (op.operation === 'delete') {
     // 重做删除 = 删除
     deleteShape(op.shape_id);
@@ -332,15 +305,8 @@ export function executeRedo(session_id: string): { success: boolean; message: st
   } else if (op.operation === 'update') {
     // 重做修改 = 应用 after_state
     const afterState = op.after_state;
-    // 兼容两种 position 格式
-    const posX = afterState.position_x ?? afterState.position?.x ?? undefined;
-    const posY = afterState.position_y ?? afterState.position?.y ?? undefined;
-    const posZ = afterState.position_z ?? afterState.position?.z ?? undefined;
     updateShape(op.shape_id, {
       vertexList: afterState.vertexList,
-      position_x: posX,
-      position_y: posY,
-      position_z: posZ,
     });
     markOperationRedone(op.id);
     return { success: true, message: '已重做修改操作', shape: { ...afterState, action: 'update' } };
