@@ -254,11 +254,6 @@ export async function handleChatSDKContinue(req: Request, res: Response) {
     const tempData = lastValue?.tempData;
     const messages = lastValue?.messages || [];
 
-    console.log('📊 LangGraph 返回结果:');
-    console.log('  - resultIntent:', resultIntent);
-    console.log('  - tempData:', JSON.stringify(tempData));
-    console.log('  - modifiedObject:', JSON.stringify(tempData?.modifiedObject));
-
     // 提取最后一条 assistant 消息
     let assistantMessage = '';
     for (let i = messages.length - 1; i >= 0; i--) {

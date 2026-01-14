@@ -45,9 +45,18 @@ export function initDatabase() {
       operation TEXT NOT NULL CHECK(operation IN ('create', 'update', 'delete')),
       before_state TEXT,
       after_state TEXT,
+      undone INTEGER DEFAULT 0,
       operated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // 兼容旧表：添加 undone 字段（如果不存在）
+  try {
+    db.exec(`ALTER TABLE shape_operations ADD COLUMN undone INTEGER DEFAULT 0`);
+    console.log('✅ 添加 undone 字段成功');
+  } catch (e) {
+    // 字段已存在，忽略错误
+  }
 
   // 创建索引
   db.exec(`

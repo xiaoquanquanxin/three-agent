@@ -180,3 +180,171 @@ export function getOperationHistory(session_id: string, limit: number = 10) {
     after_state: op.after_state ? JSON.parse(op.after_state) : null
   }));
 }
+
+// ========== Undo/Redo 操作 ==========
+
+/**
+ * 获取最近一条可撤销的操作（未被撤销的）
+ */
+export function getLastUndoableOperation(session_id: string) {
+  // 暂时不限制 session_id，查询所有操作
+  const stmt = db.prepare(`
+    SELECT * FROM shape_operations
+    WHERE undone = 0
+    ORDER BY operated_at DESC
+    LIMIT 1
+  `);
+
+  const op = stmt.get() as any;
+  if (op) {
+    op.before_state = op.before_state ? JSON.parse(op.before_state) : null;
+    op.after_state = op.after_state ? JSON.parse(op.after_state) : null;
+  }
+  return op;
+}
+
+/**
+ * 获取最近一条可重做的操作（已被撤销的）
+ */
+export function getLastRedoableOperation(session_id: string) {
+  // 暂时不限制 session_id，查询所有操作
+  const stmt = db.prepare(`
+    SELECT * FROM shape_operations
+    WHERE undone = 1
+    ORDER BY operated_at DESC
+    LIMIT 1
+  `);
+
+  const op = stmt.get() as any;
+  if (op) {
+    op.before_state = op.before_state ? JSON.parse(op.before_state) : null;
+    op.after_state = op.after_state ? JSON.parse(op.after_state) : null;
+  }
+  return op;
+}
+
+/**
+ * 标记操作为已撤销
+ */
+export function markOperationUndone(operationId: number) {
+  const stmt = db.prepare(`
+    UPDATE shape_operations SET undone = 1 WHERE id = ?
+  `);
+  return stmt.run(operationId);
+}
+
+/**
+ * 标记操作为未撤销（重做）
+ */
+export function markOperationRedone(operationId: number) {
+  const stmt = db.prepare(`
+    UPDATE shape_operations SET undone = 0 WHERE id = ?
+  `);
+  return stmt.run(operationId);
+}
+
+/**
+ * 执行 Undo 操作
+ */
+export function executeUndo(session_id: string): { success: boolean; message: string; shape?: any } {
+  const op = getLastUndoableOperation(session_id);
+  
+  if (!op) {
+    return { success: false, message: '没有可撤销的操作' };
+  }
+
+  // 根据操作类型执行反向操作
+  if (op.operation === 'create') {
+    // 撤销创建 = 删除
+    deleteShape(op.shape_id);
+    markOperationUndone(op.id);
+    return { success: true, message: '已撤销创建操作', shape: { id: op.shape_id, action: 'delete' } };
+  } else if (op.operation === 'delete') {
+    // 撤销删除 = 恢复
+    const beforeState = op.before_state;
+    // 兼容两种 position 格式
+    const posX = beforeState.position_x ?? beforeState.position?.x ?? 0;
+    const posY = beforeState.position_y ?? beforeState.position?.y ?? 0;
+    const posZ = beforeState.position_z ?? beforeState.position?.z ?? 0;
+    createShape({
+      id: beforeState.id,
+      type: beforeState.type,
+      vertexList: beforeState.vertexList,
+      position_x: posX,
+      position_y: posY,
+      position_z: posZ,
+    });
+    markOperationUndone(op.id);
+    return { success: true, message: '已撤销删除操作', shape: { ...beforeState, position_x: posX, position_y: posY, position_z: posZ, action: 'create' } };
+  } else if (op.operation === 'update') {
+    // 撤销修改 = 恢复到 before_state
+    const beforeState = op.before_state;
+    // 兼容两种 position 格式
+    const posX = beforeState.position_x ?? beforeState.position?.x ?? undefined;
+    const posY = beforeState.position_y ?? beforeState.position?.y ?? undefined;
+    const posZ = beforeState.position_z ?? beforeState.position?.z ?? undefined;
+    updateShape(op.shape_id, {
+      vertexList: beforeState.vertexList,
+      position_x: posX,
+      position_y: posY,
+      position_z: posZ,
+    });
+    markOperationUndone(op.id);
+    return { success: true, message: '已撤销修改操作', shape: { ...beforeState, action: 'update' } };
+  }
+
+  return { success: false, message: '未知操作类型' };
+}
+
+/**
+ * 执行 Redo 操作
+ */
+export function executeRedo(session_id: string): { success: boolean; message: string; shape?: any } {
+  const op = getLastRedoableOperation(session_id);
+  
+  if (!op) {
+    return { success: false, message: '没有可重做的操作' };
+  }
+
+  // 根据操作类型重新执行
+  if (op.operation === 'create') {
+    // 重做创建 = 创建
+    const afterState = op.after_state;
+    // 兼容两种 position 格式
+    const posX = afterState.position_x ?? afterState.position?.x ?? 0;
+    const posY = afterState.position_y ?? afterState.position?.y ?? 0;
+    const posZ = afterState.position_z ?? afterState.position?.z ?? 0;
+    createShape({
+      id: afterState.id,
+      type: afterState.type,
+      vertexList: afterState.vertexList,
+      position_x: posX,
+      position_y: posY,
+      position_z: posZ,
+    });
+    markOperationRedone(op.id);
+    return { success: true, message: '已重做创建操作', shape: { ...afterState, position_x: posX, position_y: posY, position_z: posZ, action: 'create' } };
+  } else if (op.operation === 'delete') {
+    // 重做删除 = 删除
+    deleteShape(op.shape_id);
+    markOperationRedone(op.id);
+    return { success: true, message: '已重做删除操作', shape: { id: op.shape_id, action: 'delete' } };
+  } else if (op.operation === 'update') {
+    // 重做修改 = 应用 after_state
+    const afterState = op.after_state;
+    // 兼容两种 position 格式
+    const posX = afterState.position_x ?? afterState.position?.x ?? undefined;
+    const posY = afterState.position_y ?? afterState.position?.y ?? undefined;
+    const posZ = afterState.position_z ?? afterState.position?.z ?? undefined;
+    updateShape(op.shape_id, {
+      vertexList: afterState.vertexList,
+      position_x: posX,
+      position_y: posY,
+      position_z: posZ,
+    });
+    markOperationRedone(op.id);
+    return { success: true, message: '已重做修改操作', shape: { ...afterState, action: 'update' } };
+  }
+
+  return { success: false, message: '未知操作类型' };
+}

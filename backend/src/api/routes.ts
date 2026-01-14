@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { handleChatSDK, handleChatSDKContinue } from './handlers-sdk';
-import { handleGetShapes } from './handlers';
+import { handleGetShapes, handleUndo, handleRedo } from './handlers';
 
 const router = Router();
 
@@ -21,5 +21,17 @@ router.post('/chat-sdk/continue', handleChatSDKContinue);
  * 获取所有形状
  */
 router.get('/shapes', handleGetShapes);
+
+/**
+ * POST /api/undo
+ * 撤销上一步操作
+ */
+router.post('/undo', handleUndo);
+
+/**
+ * POST /api/redo
+ * 重做上一步撤销的操作
+ */
+router.post('/redo', handleRedo);
 
 export default router;

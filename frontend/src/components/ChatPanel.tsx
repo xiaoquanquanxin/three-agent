@@ -223,6 +223,100 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
     }
   }
 
+  // 撤销操作
+  async function handleUndo() {
+    if (loading) return
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.shape) {
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.message,
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+
+        // 根据 action 更新场景
+        if (data.shape.action === 'delete') {
+          onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.shape.id))
+        } else if (data.shape.action === 'create') {
+          onShapeUpdate((prevShapes) => [...prevShapes, data.shape])
+        } else if (data.shape.action === 'update') {
+          onShapeUpdate((prevShapes) =>
+            prevShapes.map(s => s.id === data.shape.id ? data.shape : s)
+          )
+        }
+      } else {
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.message || '没有可撤销的操作',
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+      }
+    } catch (error) {
+      console.error('Undo 失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 重做操作
+  async function handleRedo() {
+    if (loading) return
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/redo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.shape) {
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.message,
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+
+        // 根据 action 更新场景
+        if (data.shape.action === 'delete') {
+          onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.shape.id))
+        } else if (data.shape.action === 'create') {
+          onShapeUpdate((prevShapes) => [...prevShapes, data.shape])
+        } else if (data.shape.action === 'update') {
+          onShapeUpdate((prevShapes) =>
+            prevShapes.map(s => s.id === data.shape.id ? data.shape : s)
+          )
+        }
+      } else {
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: data.message || '没有可重做的操作',
+          timestamp: new Date(),
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+      }
+    } catch (error) {
+      console.error('Redo 失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="chat-panel">
       {/* 标题 */}
@@ -273,17 +367,27 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 
       {/* 输入框 */}
       <div className="input-area">
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="输入你的指令..."
-          disabled={loading}
-          rows={2}
-        />
-        <button onClick={handleSend} disabled={loading || !input.trim()}>
-          {loading ? '发送中...' : '发送'}
-        </button>
+        <div className="action-buttons">
+          <button onClick={handleUndo} disabled={loading} title="撤销 (Undo)">
+            ↩️ 撤销
+          </button>
+          <button onClick={handleRedo} disabled={loading} title="重做 (Redo)">
+            ↪️ 重做
+          </button>
+        </div>
+        <div className="input-row">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="输入你的指令..."
+            disabled={loading}
+            rows={2}
+          />
+          <button onClick={handleSend} disabled={loading || !input.trim()}>
+            {loading ? '发送中...' : '发送'}
+          </button>
+        </div>
       </div>
     </div>
   )
