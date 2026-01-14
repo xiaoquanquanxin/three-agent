@@ -39,11 +39,21 @@ const ACTION_MAP = {
     return { action: 'none' };
   },
   delete: (tempData: any) => {
+    // 支持批量删除
+    if (tempData?.deletedObjects && Array.isArray(tempData.deletedObjects)) {
+      return {
+        action: 'delete',
+        deletedObjects: tempData.deletedObjects,
+        targetIds: tempData.deletedObjects.map((o: any) => o.id),
+      };
+    }
+    // 兼容单个删除
     const result = TempDataSchema.safeParse(tempData);
     if (result.success && result.data.targetObjectId) {
       return {
         action: 'delete',
         targetId: result.data.targetObjectId,
+        targetIds: [result.data.targetObjectId],
       };
     }
     return { action: 'none' };

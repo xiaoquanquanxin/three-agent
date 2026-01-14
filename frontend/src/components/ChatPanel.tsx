@@ -102,10 +102,15 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
         // 创建对象：直接添加到场景
         console.log('✅ 收到创建响应，添加对象:', data.data)
         onShapeUpdate((prevShapes) => [...prevShapes, data.data])
-      } else if (data.action === 'delete' && data.targetId) {
-        // 删除对象：从场景移除
-        console.log('✅ 收到删除响应，移除对象:', data.targetId)
-        onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
+      } else if (data.action === 'delete') {
+        // 删除对象：支持批量删除
+        if (data.targetIds && Array.isArray(data.targetIds)) {
+          console.log('✅ 收到批量删除响应，移除对象:', data.targetIds)
+          onShapeUpdate((prevShapes) => prevShapes.filter(s => !data.targetIds.includes(s.id)))
+        } else if (data.targetId) {
+          console.log('✅ 收到删除响应，移除对象:', data.targetId)
+          onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
+        }
       } else if (data.action === 'modify' && data.data) {
         // 修改对象：更新场景中的对象
         console.log('✅ 收到修改响应，更新对象:', data.data)
@@ -193,9 +198,15 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
       if (data.action === 'create' && data.data) {
         console.log('✅ 收到创建响应（interrupt后），添加对象:', data.data)
         onShapeUpdate((prevShapes) => [...prevShapes, data.data])
-      } else if (data.action === 'delete' && data.targetId) {
-        console.log('✅ 收到删除响应（interrupt后），移除对象:', data.targetId)
-        onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
+      } else if (data.action === 'delete') {
+        // 支持批量删除
+        if (data.targetIds && Array.isArray(data.targetIds)) {
+          console.log('✅ 收到批量删除响应（interrupt后），移除对象:', data.targetIds)
+          onShapeUpdate((prevShapes) => prevShapes.filter(s => !data.targetIds.includes(s.id)))
+        } else if (data.targetId) {
+          console.log('✅ 收到删除响应（interrupt后），移除对象:', data.targetId)
+          onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
+        }
       } else if (data.action === 'modify' && data.data) {
         console.log('✅ 收到修改响应（interrupt后），更新对象:', data.data)
         onShapeUpdate((prevShapes) =>
@@ -237,7 +248,7 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 
       const data = await response.json()
 
-      if (data.success && data.shape) {
+      if (data.success) {
         const assistantMessage: Message = {
           role: 'assistant',
           content: data.message,
@@ -245,15 +256,18 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
         }
         setMessages((prev) => [...prev, assistantMessage])
 
-        // 根据 action 更新场景
-        if (data.shape.action === 'delete') {
-          onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.shape.id))
-        } else if (data.shape.action === 'create') {
-          onShapeUpdate((prevShapes) => [...prevShapes, data.shape])
-        } else if (data.shape.action === 'update') {
-          onShapeUpdate((prevShapes) =>
-            prevShapes.map(s => s.id === data.shape.id ? data.shape : s)
-          )
+        // 支持批量撤销
+        const shapes = data.shapes || (data.shape ? [data.shape] : [])
+        for (const shape of shapes) {
+          if (shape.action === 'delete') {
+            onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== shape.id))
+          } else if (shape.action === 'create') {
+            onShapeUpdate((prevShapes) => [...prevShapes, shape])
+          } else if (shape.action === 'update') {
+            onShapeUpdate((prevShapes) =>
+              prevShapes.map(s => s.id === shape.id ? shape : s)
+            )
+          }
         }
       } else {
         const assistantMessage: Message = {
@@ -284,7 +298,7 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
 
       const data = await response.json()
 
-      if (data.success && data.shape) {
+      if (data.success) {
         const assistantMessage: Message = {
           role: 'assistant',
           content: data.message,
@@ -292,15 +306,18 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
         }
         setMessages((prev) => [...prev, assistantMessage])
 
-        // 根据 action 更新场景
-        if (data.shape.action === 'delete') {
-          onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.shape.id))
-        } else if (data.shape.action === 'create') {
-          onShapeUpdate((prevShapes) => [...prevShapes, data.shape])
-        } else if (data.shape.action === 'update') {
-          onShapeUpdate((prevShapes) =>
-            prevShapes.map(s => s.id === data.shape.id ? data.shape : s)
-          )
+        // 支持批量重做
+        const shapes = data.shapes || (data.shape ? [data.shape] : [])
+        for (const shape of shapes) {
+          if (shape.action === 'delete') {
+            onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== shape.id))
+          } else if (shape.action === 'create') {
+            onShapeUpdate((prevShapes) => [...prevShapes, shape])
+          } else if (shape.action === 'update') {
+            onShapeUpdate((prevShapes) =>
+              prevShapes.map(s => s.id === shape.id ? shape : s)
+            )
+          }
         }
       } else {
         const assistantMessage: Message = {

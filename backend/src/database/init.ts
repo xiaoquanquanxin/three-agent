@@ -44,6 +44,7 @@ export function initDatabase() {
       before_state TEXT,
       after_state TEXT,
       undone INTEGER DEFAULT 0,
+      batch_id TEXT,
       operated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -52,6 +53,14 @@ export function initDatabase() {
   try {
     db.exec(`ALTER TABLE shape_operations ADD COLUMN undone INTEGER DEFAULT 0`);
     console.log('✅ 添加 undone 字段成功');
+  } catch (e) {
+    // 字段已存在，忽略错误
+  }
+
+  // 兼容旧表：添加 batch_id 字段（如果不存在）
+  try {
+    db.exec(`ALTER TABLE shape_operations ADD COLUMN batch_id TEXT`);
+    console.log('✅ 添加 batch_id 字段成功');
   } catch (e) {
     // 字段已存在，忽略错误
   }
