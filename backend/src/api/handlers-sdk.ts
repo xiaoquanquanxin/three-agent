@@ -59,6 +59,15 @@ const ACTION_MAP = {
     return { action: 'none' };
   },
   modify: (tempData: any) => {
+    // 支持批量修改
+    if (tempData?.modifiedObjects && Array.isArray(tempData.modifiedObjects)) {
+      return {
+        action: 'modify',
+        modifiedObjects: tempData.modifiedObjects,
+        data: tempData.modifiedObjects,  // 兼容
+      };
+    }
+    // 单个修改
     const result = TempDataSchema.safeParse(tempData);
     if (result.success && result.data.modifiedObject) {
       return {

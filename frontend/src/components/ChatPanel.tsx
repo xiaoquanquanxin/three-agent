@@ -111,12 +111,20 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
           console.log('✅ 收到删除响应，移除对象:', data.targetId)
           onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
         }
-      } else if (data.action === 'modify' && data.data) {
-        // 修改对象：更新场景中的对象
-        console.log('✅ 收到修改响应，更新对象:', data.data)
-        onShapeUpdate((prevShapes) =>
-          prevShapes.map(s => s.id === data.data.id ? data.data : s)
-        )
+      } else if (data.action === 'modify') {
+        // 修改对象：支持批量修改
+        if (data.modifiedObjects && Array.isArray(data.modifiedObjects)) {
+          console.log('✅ 收到批量修改响应，更新对象:', data.modifiedObjects.length)
+          onShapeUpdate((prevShapes) => {
+            const modifiedMap = new Map(data.modifiedObjects.map((o: any) => [o.id, o]))
+            return prevShapes.map(s => modifiedMap.has(s.id) ? modifiedMap.get(s.id) : s)
+          })
+        } else if (data.data) {
+          console.log('✅ 收到修改响应，更新对象:', data.data)
+          onShapeUpdate((prevShapes) =>
+            prevShapes.map(s => s.id === data.data.id ? data.data : s)
+          )
+        }
       } else {
         // 其他情况：重新获取所有形状（兜底）
         await fetchShapes()
@@ -207,11 +215,20 @@ function ChatPanel({ onShapeUpdate, sceneRef }: ChatPanelProps) {
           console.log('✅ 收到删除响应（interrupt后），移除对象:', data.targetId)
           onShapeUpdate((prevShapes) => prevShapes.filter(s => s.id !== data.targetId))
         }
-      } else if (data.action === 'modify' && data.data) {
-        console.log('✅ 收到修改响应（interrupt后），更新对象:', data.data)
-        onShapeUpdate((prevShapes) =>
-          prevShapes.map(s => s.id === data.data.id ? data.data : s)
-        )
+      } else if (data.action === 'modify') {
+        // 支持批量修改
+        if (data.modifiedObjects && Array.isArray(data.modifiedObjects)) {
+          console.log('✅ 收到批量修改响应（interrupt后），更新对象:', data.modifiedObjects.length)
+          onShapeUpdate((prevShapes) => {
+            const modifiedMap = new Map(data.modifiedObjects.map((o: any) => [o.id, o]))
+            return prevShapes.map(s => modifiedMap.has(s.id) ? modifiedMap.get(s.id) : s)
+          })
+        } else if (data.data) {
+          console.log('✅ 收到修改响应（interrupt后），更新对象:', data.data)
+          onShapeUpdate((prevShapes) =>
+            prevShapes.map(s => s.id === data.data.id ? data.data : s)
+          )
+        }
       }
     } catch (error) {
       console.error('Continue 请求失败:', error)
