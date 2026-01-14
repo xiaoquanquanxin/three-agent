@@ -318,16 +318,35 @@ function createShapeMesh(shape: any): THREE.Mesh | null {
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
     geometry.computeVertexNormals()
   } else if (type === 'circle' && vertexList?.center) {
-    // 圆形：使用 CircleGeometry（暂时保持 2D，后续可改成 3D 圆盘）
+    // 圆形：使用 BufferGeometry 创建 3D 圆盘
     const radius = vertexList.radius || 5
-    geometry = new THREE.CircleGeometry(radius, 32)
-    // 圆形需要旋转和定位
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.rotation.x = -Math.PI / 2
-    mesh.position.set(center[0], center[1] + 0.1, center[2])
-    mesh.userData.id = shape.id
-    mesh.userData.type = type
-    return mesh
+    const segments = 32
+    geometry = new THREE.BufferGeometry()
+    
+    // 创建圆盘顶点（中心点 + 圆周点）
+    const vertices = []
+    const centerPos = vertexList.center
+    
+    // 中心点
+    vertices.push(centerPos[0], centerPos[1], centerPos[2])
+    
+    // 圆周点（在 XZ 平面上，Y 坐标与中心相同）
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2
+      const x = centerPos[0] + Math.cos(angle) * radius
+      const z = centerPos[2] + Math.sin(angle) * radius
+      vertices.push(x, centerPos[1], z)
+    }
+    
+    // 创建三角形索引（从中心点到圆周的扇形）
+    const indices = []
+    for (let i = 0; i < segments; i++) {
+      indices.push(0, i + 1, i + 2)
+    }
+    
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3))
+    geometry.setIndex(indices)
+    geometry.computeVertexNormals()
   } else if (type === 'triangle' && Array.isArray(vertexList)) {
     // 三角形：使用 BufferGeometry（支持 3D 顶点）
     geometry = new THREE.BufferGeometry()
